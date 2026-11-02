@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}ROBODİ{% endblock %} — Dashboard</title>
+  <title>{% block title %}ROBODİ{% endblock %} — ROBODİ</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
@@ -16,7 +16,7 @@
     </div>
     <nav class="sidebar-nav">
       <a href="/" class="nav-item {% if request.path == '/' %}active{% endif %}">
-        <span class="nav-icon">📊</span> Dashboard
+        <span class="nav-icon">📊</span> Panel
       </a>
       <a href="/users" class="nav-item {% if request.path == '/users' %}active{% endif %}">
         <span class="nav-icon">👥</span> Kullanıcılar

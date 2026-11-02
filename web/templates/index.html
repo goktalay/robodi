@@ -1,245 +1,171 @@
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ROBODİ Kontrol Paneli</title>
-<style>
-  :root {
-    --bg: #0a0e1a; --bg2: #111827; --card: #1a2235;
-    --accent: #00c8ff; --accent2: #7c3aed;
-    --fg: #e2e8f0; --fg2: #94a3b8;
-    --green: #10b981; --red: #ef4444; --yellow: #f59e0b;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--fg); font-family: 'Inter', system-ui, sans-serif; }
+{% extends "base.html" %}
+{% block title %}Panel{% endblock %}
+{% block header %}Kontrol Paneli{% endblock %}
 
-  header {
-    display: flex; align-items: center; gap: 12px;
-    padding: 14px 24px;
-    background: var(--bg2);
-    border-bottom: 1px solid #1e2d45;
-  }
-  header h1 { font-size: 1.3rem; letter-spacing: 2px; color: var(--accent); }
-  .status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-  .state-badge {
-    margin-left: auto;
-    padding: 4px 12px; border-radius: 20px;
-    font-size: .75rem; font-weight: 600; letter-spacing: 1px;
-    background: rgba(0,200,255,.15); color: var(--accent); border: 1px solid var(--accent);
-  }
+{% block content %}
+<div class="grid grid-4">
+  <div class="card stat-card">
+    <div class="stat-icon">🤖</div>
+    <div class="stat-label">Durum</div>
+    <div class="stat-value" id="statState">—</div>
+  </div>
+  <div class="card stat-card">
+    <div class="stat-icon">👤</div>
+    <div class="stat-label">Aktif Kullanıcı</div>
+    <div class="stat-value" id="statUser">—</div>
+  </div>
+  <div class="card stat-card">
+    <div class="stat-icon">🎙️</div>
+    <div class="stat-label">Konuşma</div>
+    <div class="stat-value" id="statConversation">—</div>
+  </div>
+  <div class="card stat-card">
+    <div class="stat-icon">🌡️</div>
+    <div class="stat-label">CPU Sıcaklığı</div>
+    <div class="stat-value" id="statCpu">—</div>
+  </div>
+</div>
 
-  nav { display: flex; gap: 2px; padding: 0 24px; background: var(--bg2); border-bottom: 1px solid #1e2d45; }
-  nav a { padding: 10px 18px; color: var(--fg2); text-decoration: none; font-size: .85rem; border-bottom: 2px solid transparent; transition: .2s; }
-  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
-
-  main { padding: 24px; max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; }
-  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
-
-  .card { background: var(--card); border-radius: 12px; padding: 20px; border: 1px solid #1e2d45; }
-  .card h2 { font-size: .9rem; letter-spacing: 1px; color: var(--fg2); margin-bottom: 16px; text-transform: uppercase; }
-
-  /* Servo sliders */
-  .servo-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-  .servo-label { font-size: .8rem; color: var(--fg2); width: 90px; flex-shrink: 0; }
-  input[type=range] { flex: 1; accent-color: var(--accent); }
-  .servo-val { font-size: .85rem; color: var(--accent); width: 40px; text-align: right; }
-
-  /* Expressions */
-  .expr-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-  .expr-btn {
-    padding: 10px 6px; border-radius: 8px; border: 1px solid #1e2d45;
-    background: var(--bg2); color: var(--fg2); cursor: pointer; font-size: .78rem;
-    transition: .2s;
-  }
-  .expr-btn:hover, .expr-btn.active { background: rgba(0,200,255,.1); border-color: var(--accent); color: var(--accent); }
-
-  /* TTS */
-  .tts-row { display: flex; gap: 8px; }
-  .tts-row input { flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid #1e2d45; background: var(--bg2); color: var(--fg); font-size: .9rem; }
-  .tts-row input:focus { outline: none; border-color: var(--accent); }
-  button.primary {
-    padding: 10px 18px; border-radius: 8px; border: none;
-    background: var(--accent); color: #000; font-weight: 700; cursor: pointer; font-size: .85rem;
-    transition: .15s;
-  }
-  button.primary:hover { background: #00a8d4; }
-
-  /* Camera feed */
-  .cam-box { background: #000; border-radius: 8px; aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-  .cam-box img { width: 100%; height: 100%; object-fit: cover; }
-  .cam-placeholder { color: var(--fg2); font-size: .85rem; }
-
-  /* Status grid */
-  .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #1e2d45; }
-  .stat-row:last-child { border: none; }
-  .stat-key { font-size: .8rem; color: var(--fg2); }
-  .stat-val { font-size: .85rem; font-weight: 600; color: var(--fg); }
-  .ok { color: var(--green); }
-  .warn { color: var(--yellow); }
-  .err { color: var(--red); }
-</style>
-</head>
-<body>
-
-<header>
-  <div class="status-dot" id="dotEl"></div>
-  <h1>ROBODİ</h1>
-  <span class="state-badge" id="stateEl">YÜKLENIYOR</span>
-</header>
-
-<nav>
-  <a href="/" class="active">Panel</a>
-  <a href="/logs">Loglar</a>
-  <a href="/settings">Ayarlar</a>
-</nav>
-
-<main>
-
+<div class="grid grid-3">
   <!-- SERVO KONTROL -->
   <div class="card">
-    <h2>🎮 Servo Kontrol</h2>
+    <h2 class="card-title">🎮 Servo Kontrol</h2>
+    {% for key, label, lo, hi, val in [
+         ("head_pan",  "Kafa Yatay", -90, 90, 0),
+         ("head_tilt", "Kafa Dikey", -30, 30, 0),
+         ("left_arm",  "Sol Kol",      0, 180, 90),
+         ("right_arm", "Sağ Kol",      0, 180, 90)] %}
     <div class="servo-row">
-      <span class="servo-label">Kafa Yatay</span>
-      <input type="range" min="-90" max="90" value="0" id="srv_head_pan" oninput="servoMove('head_pan', this.value)">
-      <span class="servo-val" id="val_head_pan">0°</span>
+      <span class="servo-label">{{ label }}</span>
+      <input type="range" min="{{ lo }}" max="{{ hi }}" value="{{ val }}" id="srv_{{ key }}"
+             data-default="{{ val }}" oninput="servoMove('{{ key }}', this.value)">
+      <span class="servo-val" id="val_{{ key }}">{{ val }}°</span>
     </div>
-    <div class="servo-row">
-      <span class="servo-label">Kafa Dikey</span>
-      <input type="range" min="-30" max="30" value="0" id="srv_head_tilt" oninput="servoMove('head_tilt', this.value)">
-      <span class="servo-val" id="val_head_tilt">0°</span>
-    </div>
-    <div class="servo-row">
-      <span class="servo-label">Sol Kol</span>
-      <input type="range" min="0" max="180" value="90" id="srv_left_arm" oninput="servoMove('left_arm', this.value)">
-      <span class="servo-val" id="val_left_arm">90°</span>
-    </div>
-    <div class="servo-row">
-      <span class="servo-label">Sağ Kol</span>
-      <input type="range" min="0" max="180" value="90" id="srv_right_arm" oninput="servoMove('right_arm', this.value)">
-      <span class="servo-val" id="val_right_arm">90°</span>
-    </div>
-    <button class="primary" onclick="centerAll()" style="margin-top:8px;width:100%">⬛ Merkeze Al</button>
+    {% endfor %}
+    <button class="btn btn-secondary btn-full" onclick="centerAll()">⬛ Merkeze Al</button>
   </div>
 
-  <!-- YÜZ İFADESİ -->
+  <!-- YÜZ İFADESİ + SESLENDİR -->
   <div class="card">
-    <h2>😊 Yüz İfadesi</h2>
+    <h2 class="card-title">😊 Yüz İfadesi</h2>
     <div class="expr-grid">
-      <button class="expr-btn active" onclick="setExpr('idle')">😐 Nötr</button>
-      <button class="expr-btn" onclick="setExpr('happy')">😊 Mutlu</button>
-      <button class="expr-btn" onclick="setExpr('sad')">😔 Üzgün</button>
-      <button class="expr-btn" onclick="setExpr('angry')">😠 Kızgın</button>
-      <button class="expr-btn" onclick="setExpr('surprised')">😲 Şaşkın</button>
-      <button class="expr-btn" onclick="setExpr('thinking')">🤔 Düşünen</button>
-      <button class="expr-btn" onclick="setExpr('listening')">👂 Dinliyor</button>
-      <button class="expr-btn" onclick="setExpr('speaking')">🗣️ Konuşuyor</button>
+      {% for key, label in [
+           ("idle", "😐 Nötr"), ("happy", "😊 Mutlu"), ("sad", "😔 Üzgün"), ("angry", "😠 Kızgın"),
+           ("surprised", "😲 Şaşkın"), ("thinking", "🤔 Düşünen"), ("listening", "👂 Dinliyor"),
+           ("speaking", "🗣️ Konuşuyor")] %}
+      <button class="btn-anim expr-btn {% if key == 'idle' %}active{% endif %}"
+              onclick="setExpr('{{ key }}', this)">{{ label }}</button>
+      {% endfor %}
     </div>
-    <div style="margin-top:16px">
-      <h2>🔊 Seslendir</h2>
-      <div class="tts-row" style="margin-top:10px">
-        <input type="text" id="ttsInput" placeholder="Söylenmesini istediğin metni yaz..." maxlength="200">
-        <button class="primary" onclick="sayText()">Söyle</button>
-      </div>
+
+    <h2 class="card-title" style="margin-top:20px">🔊 Seslendir</h2>
+    <div class="input-row">
+      <input class="input" type="text" id="ttsInput" placeholder="Söylenmesini istediğin metin..."
+             maxlength="200" onkeydown="if(event.key==='Enter')sayText()">
+      <button class="btn btn-primary" onclick="sayText()">Söyle</button>
     </div>
   </div>
 
-  <!-- DURUM -->
+  <!-- SİSTEM DURUMU -->
   <div class="card">
-    <h2>📊 Sistem Durumu</h2>
-    <div class="stat-row"><span class="stat-key">Robot Durumu</span><span class="stat-val ok" id="stateVal">-</span></div>
-    <div class="stat-row"><span class="stat-key">Kamera</span><span class="stat-val" id="camStat">-</span></div>
-    <div class="stat-row"><span class="stat-key">Mikrofon</span><span class="stat-val" id="micStat">-</span></div>
-    <div class="stat-row"><span class="stat-key">ESP32</span><span class="stat-val" id="espStat">-</span></div>
-    <div class="stat-row"><span class="stat-key">AI Motoru</span><span class="stat-val" id="aiStat">-</span></div>
-    <div class="stat-row"><span class="stat-key">CPU Sıcaklığı</span><span class="stat-val" id="cpuTemp">-</span></div>
-  </div>
-
-  <!-- KAMERA AKIŞI -->
-  <div class="card" style="grid-column: 1 / -1">
-    <h2>📷 Kamera Görüntüsü</h2>
-    <div class="cam-box">
-      <span class="cam-placeholder">Kamera akışı için snapshot butonu kullan</span>
+    <h2 class="card-title">📊 Sistem Durumu</h2>
+    {% for key, label in [
+         ("camera", "Kamera"), ("microphone", "Mikrofon"), ("wake_word", "Wake word"),
+         ("esp32", "ESP32"), ("ai", "AI Motoru"), ("gmail", "Gmail")] %}
+    <div class="stat-row">
+      <span class="stat-key">{{ label }}</span>
+      <span class="stat-val" id="sys_{{ key }}">—</span>
     </div>
-    <button class="primary" onclick="takeSnapshot()" style="margin-top:10px">📸 Anlık Görüntü</button>
+    {% endfor %}
   </div>
+</div>
 
-</main>
+<!-- KAMERA -->
+<div class="card">
+  <div class="card-header">
+    <h2 class="card-title" style="margin:0">📷 Kamera Görüntüsü</h2>
+    <button class="btn btn-primary" onclick="takeSnapshot()">📸 Anlık Görüntü</button>
+  </div>
+  <div class="cam-box" id="camBox">
+    <span class="cam-placeholder">Görüntü almak için “Anlık Görüntü”ye basın</span>
+  </div>
+</div>
+{% endblock %}
 
+{% block scripts %}
 <script>
-let currentExpr = "idle";
+async function post(url, body) {
+  try {
+    const r = await fetch(url, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) showToast("⚠️ Robot yanıt vermedi (çevrimdışı olabilir)");
+    return r.ok;
+  } catch { showToast("⚠️ Bağlantı hatası"); return false; }
+}
 
-async function servoMove(servo, val) {
+let servoTimers = {};
+function servoMove(servo, val) {
   document.getElementById(`val_${servo}`).textContent = val + "°";
-  await fetch("/api/servo", {
-    method: "POST", headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({servo, angle: parseFloat(val)})
-  });
+  clearTimeout(servoTimers[servo]);   // kaydırırken istekleri seyrelt
+  servoTimers[servo] = setTimeout(() => post("/api/servo", {servo, angle: parseFloat(val)}), 120);
 }
 
 async function centerAll() {
-  ["head_pan","head_tilt"].forEach(s => {
-    document.getElementById(`srv_${s}`).value = 0;
-    document.getElementById(`val_${s}`).textContent = "0°";
-  });
-  ["left_arm","right_arm"].forEach(s => {
-    document.getElementById(`srv_${s}`).value = 90;
-    document.getElementById(`val_${s}`).textContent = "90°";
-  });
-  for (const s of ["head_pan","head_tilt","left_arm","right_arm"]) {
-    const val = s.includes("arm") ? 90 : 0;
-    await fetch("/api/servo", {
-      method: "POST", headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({servo: s, angle: val})
-    });
+  for (const el of document.querySelectorAll("input[type=range][id^=srv_]")) {
+    const servo = el.id.slice(4);
+    el.value = el.dataset.default;
+    document.getElementById(`val_${servo}`).textContent = el.dataset.default + "°";
+    await post("/api/servo", {servo, angle: parseFloat(el.dataset.default)});
   }
 }
 
-async function setExpr(name) {
+async function setExpr(name, btn) {
   document.querySelectorAll(".expr-btn").forEach(b => b.classList.remove("active"));
-  event.target.classList.add("active");
-  currentExpr = name;
-  await fetch("/api/expression", {
-    method: "POST", headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({expression: name})
-  });
+  btn.classList.add("active");
+  await post("/api/expression", {expression: name});
 }
 
 async function sayText() {
-  const text = document.getElementById("ttsInput").value.trim();
+  const input = document.getElementById("ttsInput");
+  const text = input.value.trim();
   if (!text) return;
-  await fetch("/api/say", {
-    method: "POST", headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({text})
-  });
+  if (await post("/api/say", {text})) { showToast("🔊 Söyleniyor"); input.value = ""; }
 }
 
 async function takeSnapshot() {
-  const resp = await fetch("/api/snapshot");
-  if (resp.ok) {
-    const blob = await resp.blob();
-    const url  = URL.createObjectURL(blob);
-    const img  = document.querySelector(".cam-box img") || document.createElement("img");
-    img.src = url;
-    document.querySelector(".cam-box").innerHTML = "";
-    document.querySelector(".cam-box").appendChild(img);
-  }
+  const r = await fetch("/api/snapshot");
+  const box = document.getElementById("camBox");
+  if (!r.ok) { showToast("📷 Kamera görüntüsü alınamadı"); return; }
+  const img = document.createElement("img");
+  img.src = URL.createObjectURL(await r.blob());
+  box.replaceChildren(img);
 }
 
-// Status polling
-async function updateStatus() {
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = (value === null || value === undefined || value === "") ? "—" : value;
+}
+
+async function refreshDashboard() {
   try {
-    const r = await fetch("/api/status");
-    const d = await r.json();
-    document.getElementById("stateEl").textContent  = d.state;
-    document.getElementById("stateVal").textContent = d.state;
-    document.getElementById("dotEl").style.background = d.running ? "#10b981" : "#ef4444";
+    const d = await (await fetch("/api/status")).json();
+    setText("statState", d.state);
+    setText("statUser", d.current_user || "Tanınmadı");
+    setText("statConversation", d.running ? (d.conversation ? "Aktif" : "Pasif") : "—");
+    setText("statCpu", d.cpu_temp != null ? d.cpu_temp + " °C" : "—");
+    for (const k of ["camera", "microphone", "wake_word", "esp32", "ai", "gmail"]) setText("sys_" + k, d[k]);
+    for (const [servo, angle] of Object.entries(d.servos || {})) {
+      const el = document.getElementById("srv_" + servo);
+      if (el && document.activeElement !== el) {
+        el.value = angle;
+        setText("val_" + servo, Math.round(angle) + "°");
+      }
+    }
   } catch {}
 }
-
-setInterval(updateStatus, 2000);
-updateStatus();
+refreshDashboard();
+setInterval(refreshDashboard, 3000);
 </script>
-</body>
-</html>
+{% endblock %}
