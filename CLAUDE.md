@@ -10,6 +10,8 @@ Konuşma dili ve kod yorumları **Türkçe**.
 - `core/` → `src/` birleştirmesi yapıldı (2026-11-03): tek giriş noktası `main.py`, tek systemd
   servisi (`robodi.service` → `main.py`), web paneli aynı süreçte (port 8080). `core/` silindi.
   Birleştirme kuralının kalan kısmı için "Açık işler"e bak.
+- Tek kurulum betiği `scripts/setup.sh`: sistem Python'u + `pip --break-system-packages` (venv yok).
+  `robodi.service` depoda dosya olarak tutulmaz; betik tee ile depo dizini/kullanıcıyla yazar.
 
 ## Mimari
 
@@ -57,15 +59,14 @@ Motorobit Metal Pan-Tilt + 2× MG996R (kafa), 2× SG90 (kollar), 18650 2S2P + 5V
 ## Çalıştırma
 
 ```bash
-pip install -r requirements.txt --break-system-packages   # RPi üzerinde
+./scripts/setup.sh                # RPi üzerinde tam kurulum (apt + pip + servis)
 python main.py --debug            # tam mod
 python main.py --web-only         # sadece panel (geliştirme makinesinde)
 ```
 
 ## Açık işler
 
-1. Birleştirmenin kalanı: tek kurulum betiği (`scripts/setup.sh` esas; kökteki `setup.sh` ile birleştirilecek),
-   web panelinde kullanıcı yönetimi (`login.html`/`users.html` şablonları var, `web/app.py` rotası yok).
+1. Birleştirmenin kalanı: web panelinde kullanıcı yönetimi (`login.html`/`users.html` şablonları var, `web/app.py` rotası yok).
 2. `web/templates/logs.html`, `settings.html` eksik; `web/app.py` rotaları var.
 3. `assets/faces/*.png` ifade görselleri yok (`src/display/screen.py` metin fallback kullanıyor).
 4. MG996R için `src/servo/controller.py` `angle_to_duty` sınırları (2.5–12.5 %) donanımda kalibre edilecek.
