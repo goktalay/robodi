@@ -1,0 +1,23 @@
+[Unit]
+Description=ROBODİ - Masa Arkadaşı Robot
+After=network.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/robodi
+Environment="PYTHONPATH=/home/pi/robodi"
+Environment="ANTHROPIC_API_KEY=your_key_here"
+Environment="ROBODI_SECRET_KEY=change-this-secret"
+Environment="ROBODI_ADMIN_PASSWORD=your_admin_password"
+EnvironmentFile=/home/pi/robodi/.env
+ExecStart=/home/pi/robodi/venv/bin/python -m core.main
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

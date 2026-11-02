@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="tr" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ROBODİ — Giriş</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="login-body">
+  <div class="login-container">
+    <div class="login-logo">
+      <span class="logo-icon-large">🤖</span>
+      <h1>ROBODİ</h1>
+      <p>Masa Arkadaşı Kontrol Paneli</p>
+    </div>
+    <div class="login-card">
+      <form method="POST" action="/login">
+        {% if error %}
+        <div class="alert alert-error">{{ error }}</div>
+        {% endif %}
+        <div class="form-group">
+          <label>Yönetici Şifresi</label>
+          <input type="password" name="password" class="input" placeholder="Şifre" autofocus required>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">Giriş Yap</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

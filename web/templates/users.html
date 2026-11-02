@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}Kullanıcılar{% endblock %}
+{% block header %}Kullanıcı Yönetimi{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <h2 class="card-title">👥 Yetkili Kullanıcılar</h2>
+    <button class="btn btn-primary" onclick="showAddModal()">+ Kullanıcı Ekle</button>
+  </div>
+  <div id="usersList" class="users-grid">
+    <div class="loading">Yükleniyor...</div>
+  </div>
+</div>
+
+<!-- Kullanıcı Ekle Modal -->
+<div id="addModal" class="modal hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Yeni Kullanıcı Ekle</h3>
+      <button class="modal-close" onclick="hideModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="info-text">Kullanıcıyı eklemek için kameraya bakmasını sağlayın ve formu doldurun.</p>
+      <div class="form-group">
+        <label>Kullanıcı Adı</label>
+        <input type="text" id="newUsername" class="input" placeholder="ornek: muhammed">
+      </div>
+      <div class="form-group">
+        <label>Görünen Ad</label>
+        <input type="text" id="newName" class="input" placeholder="Muhammed">
+      </div>
+      <div class="form-group">
+        <label>Karşılama Mesajı</label>
+        <input type="text" id="newGreeting" class="input" placeholder="Merhaba Muhammed!">
+      </div>
+      <div class="form-group">
+        <label>Rol</label>
+        <select id="newRole" class="input">
+          <option value="user">Kullanıcı</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div class="camera-preview">
+        <video id="cameraPreview" autoplay></video>
+        <div class="camera-overlay">
+          <div class="face-guide"></div>
+        </div>
+        <button class="btn btn-secondary" id="captureBtn" onclick="captureFaces()">📸 Yüz Tarama Başlat</button>
+        <div id="captureProgress" class="progress hidden">
+          <div class="progress-bar" id="progressBar"></div>
+          <span id="progressText">0/5 fotoğraf</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="hideModal()">İptal</button>
+      <button class="btn btn-primary" onclick="addUser()" id="addBtn" disabled>Kullanıcı Ekle</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let capturedFrames = 0;
+let captureInterval = null;
+let stream = null;
+
+async function loadUsers() {
+  const r = await fetch('/api/users');
+  const users = await r.json();
+  const container = document.getElementById('usersList');
+
+  if (Object.keys(users).length === 0) {
+    container.innerHTML = '<div class="empty-state">Henüz kullanıcı yok</div>';
+    return;
+  }
+
+  container.innerHTML = Object.entries(users).map(([username, info]) => `
+    <div class="user-card">
+      <div class="user-avatar">${info.name ? info.name[0].toUpperCase() : '?'}</div>
+      <div class="user-info">
+        <div class="user-name">${info.name || username}</div>
+        <div class="user-username">@${username}</div>
+        <div class="user-role badge ${info.role === 'admin' ? 'badge-admin' : 'badge-user'}">${info.role || 'user'}</div>
+      </div>
+      <div class="user-greeting">"${info.greeting || ''}"</div>
+      <div class="user-actions">
+        <button class="btn btn-sm btn-secondary" onclick="editUser('${username}', ${JSON.stringify(info).replace(/"/g, '&quot;')})">✏️ Düzenle</button>
+        ${username !== 'admin' ? `<button class="btn btn-sm btn-danger" onclick="deleteUser('${username}')">🗑️ Sil</button>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function deleteUser(username) {
+  if (!confirm(`"${username}" kullanıcısını silmek istediğinizden emin misiniz?`)) return;
+  const r = await fetch(`/api/users/${username}`, {method: 'DELETE'});
+  const d = await r.json();
+  showToast(d.success ? `✅ ${username} silindi` : `❌ ${d.error}`);
+  if (d.success) loadUsers();
+}
+
+function showAddModal() {
+  document.getElementById('addModal').classList.remove('hidden');
+  startCamera();
+}
+
+function hideModal() {
+  document.getElementById('addModal').classList.add('hidden');
+  stopCamera();
+  capturedFrames = 0;
+  clearInterval(captureInterval);
+}
+
+async function startCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({video: true});
+    document.getElementById('cameraPreview').srcObject = stream;
+  } catch(e) {
+    showToast('❌ Kamera açılamadı');
+  }
+}
+
+function stopCamera() {
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+  }
+}
+
+async function addUser() {
+  const username = document.getElementById('newUsername').value.trim();
+  const name = document.getElementById('newName').value.trim();
+  const greeting = document.getElementById('newGreeting').value.trim();
+  const role = document.getElementById('newRole').value;
+
+  if (!username || !name) {
+    showToast('❌ Kullanıcı adı ve ad gereklidir');
+    return;
+  }
+
+  const r = await fetch('/api/users/add', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({username, name, greeting, role})
+  });
+  const d = await r.json();
+  showToast(d.success ? `✅ ${name} eklendi` : `❌ ${d.error}`);
+  if (d.success) {
+    hideModal();
+    loadUsers();
+  }
+}
+
+loadUsers();
+</script>
+{% endblock %}

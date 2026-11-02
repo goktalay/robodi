@@ -1,0 +1,85 @@
+robodi:
+  name: "ROBODİ"
+  version: "1.0.0"
+  debug: false
+
+# ─── Donanım Pinleri (Raspberry Pi 5 GPIO) ───────────────────────
+gpio:
+  servo:
+    head_pan:   12   # GPIO12 - PWM0  - Kafa yatay (MG996R, Motorobit metal pan-tilt)
+    head_tilt:  13   # GPIO13 - PWM1  - Kafa dikey (MG996R, Motorobit metal pan-tilt)
+    left_arm:   18   # GPIO18 - PWM   - Sol kol
+    right_arm:  19   # GPIO19 - PWM   - Sağ kol
+
+  esp32:
+    uart_tx:    14   # GPIO14 → ESP32 RX
+    uart_rx:    15   # GPIO15 ← ESP32 TX
+    reset_pin:  23   # GPIO23 - ESP32 RESET
+
+# ─── Audio (ReSpeaker 2-Mics) ────────────────────────────────────
+audio:
+  input_device: "ReSpeaker"
+  sample_rate: 16000
+  channels: 2
+  chunk_size: 1024
+  vad_threshold: 0.5
+  wake_word: "robodi"
+  tts_engine: "pyttsx3"        # veya "edge-tts"
+  language: "tr-TR"
+
+# ─── Vision (AI Camera IMX500) ───────────────────────────────────
+vision:
+  camera_index: 0
+  resolution: [1920, 1080]
+  fps: 30
+  ai_model: "imx500_mobilenet_ssd"
+  detection_confidence: 0.6
+  face_tracking: true
+
+# ─── Display (3.5" TFT) ──────────────────────────────────────────
+display:
+  type: "SPI"
+  width: 480
+  height: 320
+  spi_bus: 0
+  spi_device: 0
+  dc_pin: 24
+  rst_pin: 25
+  bl_pin: 18
+  rotation: 90
+
+# ─── PAM8403 Amplifier ───────────────────────────────────────────
+amplifier:
+  volume_control: false    # PAM8403 manuel pot var
+  shutdown_pin: 26         # GPIO26 - SD pin (aktif LOW)
+
+# ─── ESP32-S3 (Göz + Ağız LED Matrix) ───────────────────────────
+esp32:
+  baud_rate: 115200
+  port: "/dev/ttyAMA0"
+  eye_matrix_size: 8       # 8x8 LED matrix
+  expressions:
+    - idle
+    - happy
+    - sad
+    - angry
+    - surprised
+    - thinking
+    - listening
+
+# ─── Web Arayüzü ─────────────────────────────────────────────────
+web:
+  host: "0.0.0.0"
+  port: 8080
+  debug: false
+  secret_key: "robodi-secret-2024"
+
+# ─── LLM / AI ────────────────────────────────────────────────────
+ai:
+  provider: "ollama"         # ollama (local) veya openai
+  model: "llama3.2:3b"
+  max_tokens: 512
+  temperature: 0.7
+  system_prompt: |
+    Sen ROBODİ'sin, Türkçe konuşan yardımsever bir robot asistansın.
+    Kısa, net ve samimi yanıtlar ver. Çok uzun cevaplar verme.
