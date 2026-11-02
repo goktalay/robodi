@@ -127,3 +127,71 @@ def test_durum_robot_ozetini_dondurur(client):
     d = client.get("/api/status").get_json()
     for k, v in ozet.items():
         assert d[k] == v
+
+
+# ── Hızlı işlemler (şaka, sabah özeti) ───────────────────────────
+
+class FakeAnnouncer:
+    """can_announce / tell_joke / morning_summary sağlayan sahte robot."""
+    def __init__(self, loop, busy=False):
+        self._loop = loop
+        self.busy = busy
+        self.calls = []
+
+    def can_announce(self):
+        return not self.busy
+
+    async def tell_joke(self):
+        self.calls.append("joke")
+        return True
+
+    async def morning_summary(self):
+        self.calls.append("summary")
+        return True
+
+
+@pytest.fixture
+def loop():
+    import asyncio
+    import threading
+    lp = asyncio.new_event_loop()
+    t = threading.Thread(target=lp.run_forever, daemon=True)
+    t.start()
+    yield lp
+    lp.call_soon_threadsafe(lp.stop)
+    t.join(timeout=2)
+    lp.close()
+
+
+@pytest.mark.parametrize("url", ["/api/joke", "/api/morning-summary"])
+def test_hizli_islem_robot_yokken_503(client, url):
+    assert client.post(url).status_code == 503
+
+
+@pytest.mark.parametrize("url", ["/api/joke", "/api/morning-summary"])
+def test_hizli_islem_mesgulken_409(client, loop, url):
+    robot = FakeAnnouncer(loop, busy=True)
+    web_app.set_robot(robot)
+    r = client.post(url)
+    assert r.status_code == 409 and "meşgul" in r.get_json()["error"]
+    assert robot.calls == []
+
+
+@pytest.mark.parametrize("url, beklenen", [("/api/joke", "joke"), ("/api/morning-summary", "summary")])
+def test_hizli_islem_baslatilir(client, loop, url, beklenen):
+    import time
+    robot = FakeAnnouncer(loop)
+    web_app.set_robot(robot)
+    assert client.post(url).status_code == 202
+    for _ in range(50):
+        if robot.calls:
+            break
+        time.sleep(0.02)
+    assert robot.calls == [beklenen]
+
+
+def test_hizli_islem_girissiz_401(monkeypatch):
+    monkeypatch.setenv("ROBODI_ADMIN_PASSWORD", PASSWORD)
+    c = web_app.app.test_client()
+    assert c.post("/api/joke").status_code == 401
+    assert c.post("/api/morning-summary").status_code == 401

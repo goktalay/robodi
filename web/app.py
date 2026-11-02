@@ -176,6 +176,30 @@ def api_expression():
     return jsonify({"ok": False}), 503
 
 
+def _start_announcement(method_name: str):
+    """Robotun duyuru yöntemini (şaka, sabah özeti) arka planda başlat."""
+    if _robot is None or getattr(_robot, "_loop", None) is None:
+        return jsonify({"ok": False, "error": "Robot çevrimdışı"}), 503
+    if not _robot.can_announce():
+        return jsonify({"ok": False, "error": "Robot şu an meşgul (konuşuyor veya dinliyor)"}), 409
+    future = asyncio.run_coroutine_threadsafe(getattr(_robot, method_name)(), _robot._loop)
+    future.add_done_callback(
+        lambda f: not f.cancelled() and f.exception()
+        and logger.error(f"{method_name} hatası: {f.exception()}")
+    )
+    return jsonify({"ok": True}), 202
+
+
+@app.route("/api/joke", methods=["POST"])
+def api_joke():
+    return _start_announcement("tell_joke")
+
+
+@app.route("/api/morning-summary", methods=["POST"])
+def api_morning_summary():
+    return _start_announcement("morning_summary")
+
+
 @app.route("/api/snapshot")
 async def api_snapshot():
     if _robot:

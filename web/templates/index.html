@@ -64,6 +64,12 @@
              maxlength="200" onkeydown="if(event.key==='Enter')sayText()">
       <button class="btn btn-primary" onclick="sayText()">Söyle</button>
     </div>
+
+    <h2 class="card-title" style="margin-top:20px">⚡ Hızlı İşlemler</h2>
+    <div class="button-grid">
+      <button class="btn btn-secondary" onclick="announce('/api/joke', '😄 Şaka hazırlanıyor...', this)">😄 Şaka Yap</button>
+      <button class="btn btn-secondary" onclick="announce('/api/morning-summary', '☀️ Sabah özeti hazırlanıyor...', this)">☀️ Sabah Özeti</button>
+    </div>
   </div>
 
   <!-- SİSTEM DURUMU -->
@@ -132,6 +138,16 @@ async function sayText() {
   const text = input.value.trim();
   if (!text) return;
   if (await post("/api/say", {text})) { showToast("🔊 Söyleniyor"); input.value = ""; }
+}
+
+async function announce(url, message, btn) {
+  btn.disabled = true;
+  try {
+    const r = await fetch(url, {method: "POST"});
+    const d = await r.json().catch(() => ({}));
+    showToast(r.ok ? message : "⚠️ " + (d.error || "İstek başarısız"));
+  } catch { showToast("⚠️ Bağlantı hatası"); }
+  setTimeout(() => { btn.disabled = false; }, 3000);   // art arda basmayı önle
 }
 
 async function takeSnapshot() {

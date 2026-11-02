@@ -39,6 +39,7 @@ class Robodi:
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._tasks: list = []
         self._stopped = False
+        self._announcing = False
 
         conv_cfg = self.config.get("conversation", {})
         self.max_turns = conv_cfg.get("max_turns", 5)
@@ -260,19 +261,45 @@ class Robodi:
             self.ai.set_user(username, self.current_user_info)
             logger.info(f"Kullanıcı tanındı: {username}")
 
-    # ── Zamanlanmış Görevler ─────────────────────────────────────
+    # ── Duyurular (şaka, sabah özeti) ────────────────────────────
 
-    async def _announce(self, text_coro):
-        """Robot boştaysa kendiliğinden konuş (şaka, sabah özeti)."""
-        if self.state.current != RobodiState.IDLE:
+    def can_announce(self) -> bool:
+        """Robot boşta ve başka bir duyuru yapmıyorsa True."""
+        return self.state.current == RobodiState.IDLE and not self._announcing
+
+    async def _announce(self, text_coro) -> bool:
+        """Robot boştaysa kendiliğinden konuş. Konuştuysa True döner."""
+        if not self.can_announce():
             text_coro.close()
-            return
-        text = await text_coro
-        if self.state.current != RobodiState.IDLE:
-            return
-        self._set_face("happy")
-        await self.speaker.say(text)
-        self._set_face("idle")
+            return False
+        self._announcing = True
+        try:
+            text = await text_coro
+            if self.state.current != RobodiState.IDLE:
+                return False   # metin hazırlanırken sohbet başladı
+            self._set_face("happy")
+            await self.speaker.say(text)
+            self._set_face("idle")
+            return True
+        finally:
+            self._announcing = False
+
+    async def tell_joke(self) -> bool:
+        """Kısa bir şaka yap (panelden veya zamanlayıcıdan)."""
+        return await self._announce(self.ai.get_joke())
+
+    async def morning_summary(self) -> bool:
+        """Günaydın mesajı + (Gmail hazırsa) okunmamış mail özeti."""
+        if not self.can_announce():
+            return False
+        summary = ""
+        if self.gmail.is_ready():
+            summary = await asyncio.get_running_loop().run_in_executor(
+                None, self.gmail.get_summary_text, 12
+            )
+        return await self._announce(self.ai.get_morning_greeting(summary))
+
+    # ── Zamanlanmış Görevler ─────────────────────────────────────
 
     async def _morning_summary_loop(self):
         hour = self.config.get("schedule", {}).get("morning_summary_hour", 9)
@@ -286,10 +313,7 @@ class Robodi:
                 logger.info("Sabah özeti atlandı: tanınan kullanıcı yok.")
                 continue
             try:
-                summary = await asyncio.get_running_loop().run_in_executor(
-                    None, self.gmail.get_summary_text, 12
-                ) if self.gmail.is_ready() else ""
-                await self._announce(self.ai.get_morning_greeting(summary))
+                await self.morning_summary()
             except Exception as e:
                 logger.error(f"Sabah özeti hatası: {e}")
 
@@ -302,6 +326,6 @@ class Robodi:
         while self.running:
             await asyncio.sleep(random.randint(lo, hi) * 60)
             try:
-                await self._announce(self.ai.get_joke())
+                await self.tell_joke()
             except Exception as e:
                 logger.error(f"Şaka hatası: {e}")
