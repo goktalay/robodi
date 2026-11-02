@@ -14,12 +14,14 @@ pyaudio>=0.2.14
 vosk>=0.3.45              # Offline STT (Türkçe)
 pyttsx3>=2.90             # Offline TTS
 edge-tts>=6.1             # Online TTS (daha iyi kalite)
+openwakeword>=0.6         # Wake word algılama
 numpy>=1.26
 
 # ── Vision ───────────────────────────────────────────────────────
 opencv-python>=4.9
 picamera2>=0.3            # RPi kamera (RPi'ye özgü)
 Pillow>=10.0
+face_recognition>=1.3     # Kullanıcı kimlik tanıma (dlib gerektirir)
 
 # ── GPIO ─────────────────────────────────────────────────────────
 RPi.GPIO>=0.7.1           # RPi'ye özgü
@@ -33,6 +35,11 @@ adafruit-blinka>=8.0
 pyserial>=3.5
 httpx>=0.27
 
-# ── AI (opsiyonel) ───────────────────────────────────────────────
-# ollama (ayrı kurulum: curl -fsSL https://ollama.com/install.sh | sh)
-# openai>=1.0             # OpenAI API için
+# ── AI ───────────────────────────────────────────────────────────
+anthropic>=0.70           # Claude API (online sohbet)
+# ollama (yerel yedek; ayrı kurulum: curl -fsSL https://ollama.com/install.sh | sh)
+
+# ── Gmail (sabah özeti) ──────────────────────────────────────────
+google-api-python-client>=2.100
+google-auth-oauthlib>=1.2
+google-auth-httplib2>=0.2

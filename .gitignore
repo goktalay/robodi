@@ -7,3 +7,4 @@ logs/
 models/
 *.log
 .DS_Store
+data/

@@ -25,7 +25,8 @@ class Camera:
                 from picamera2 import Picamera2
                 self._picam = Picamera2()
                 cfg = self._picam.create_preview_configuration(
-                    main={"size": tuple(self.resolution)}
+                    # RGB888 → numpy'da BGR, 3 kanal (OpenCV ile uyumlu)
+                    main={"size": tuple(self.resolution), "format": "RGB888"}
                 )
                 self._picam.configure(cfg)
                 self._picam.start()
@@ -65,12 +66,13 @@ class Camera:
             return frame if ret else None
         return None
 
-    async def detect_face(self) -> Optional[Tuple[int,int,int,int]]:
+    async def detect_face(self, frame=None) -> Optional[Tuple[int,int,int,int]]:
         """
-        Karede yüz algıla.
+        Karede yüz algıla (frame verilmezse kameradan alınır).
         Döner: (x, y, w, h) veya None
         """
-        frame = await self.get_frame()
+        if frame is None:
+            frame = await self.get_frame()
         if frame is None:
             return None
         return await asyncio.get_event_loop().run_in_executor(

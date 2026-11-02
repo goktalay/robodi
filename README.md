@@ -6,9 +6,9 @@ Raspberry Pi 5 tabanlı, AI destekli akıllı masa robotu.
 
 - 👁️ **Göz Animasyonları** — ESP32 ekranlarda kırpan, ifadeli gözler
 - 👄 **Ağız Animasyonu** — Konuşma sırasında senkronize ağız hareketi
-- 🎙️ **Wake Word** — "hey robodi" ile aktifleşme
+- 🎙️ **Wake Word** — openWakeWord ile aktifleşme (şimdilik "hey jarvis"; özel "hey robodi" modeli eğitilecek)
 - 👤 **Yüz Tanıma** — AI Camera ile kullanıcı kimlik doğrulama
-- 🧠 **AI Sohbet** — Claude API (online) / Llama 3.2 (offline NPU)
+- 🧠 **AI Sohbet** — Claude API (online) / Ollama + Llama 3.2 (offline yedek)
 - 📧 **Gmail Özeti** — Sabah mail özetleri
 - 🎭 **Şakalar** — Gün içi otomatik şakalar
 - 🌐 **Web Dashboard** — Yönetim paneli (ayarlar, loglar, kullanıcılar)
@@ -41,44 +41,55 @@ nano .env
 ```
 
 Doldurulacak değerler:
-- `ANTHROPIC_API_KEY` — Claude API anahtarı
+- `ANTHROPIC_API_KEY` — Claude API anahtarı (yoksa yerel Ollama kullanılır)
 - `ROBODI_ADMIN_PASSWORD` — Web dashboard şifresi
-- ESP32 IP adresleri
+
+Diğer tüm ayarlar `config/settings.yaml` içinde (donanım pinleri, AI modeli, şaka aralığı, sabah özeti saati, Gmail).
+
+Gmail sabah özeti için bir kez tarayıcıyla yetkilendirin:
+
+```bash
+python -m src.services.gmail
+```
 
 ## Başlatma
 
 ```bash
 sudo systemctl start robodi
-sudo systemctl start robodi-web
 ```
 
-Web paneli: `http://<raspberry-ip>:5000`
+Robot ve web paneli tek serviste çalışır. Elle başlatmak için: `python main.py` (`--no-web`, `--web-only`, `--debug` seçenekleri var).
+
+Web paneli: `http://<raspberry-ip>:8080`
 
 ## Proje Yapısı
 
 ```
 robodi/
-├── core/               # Pi 5 ana Python kodu
-│   ├── main.py         # Ana döngü
-│   ├── wake_word.py    # "hey robodi" algılama
-│   ├── face_recognition.py  # Yüz tanıma
-│   ├── stt.py          # Konuşmadan metne (Whisper)
-│   ├── tts.py          # Metinden konuşmaya
-│   ├── ai_agent.py     # Claude / Llama entegrasyonu
-│   ├── gmail_reader.py # Gmail API
-│   ├── esp32_controller.py  # Animasyon kontrolü
-│   └── config.py       # Tüm ayarlar
+├── main.py             # Giriş noktası (robot + web paneli)
+├── config/settings.yaml # Tüm ayarlar
+├── src/
+│   ├── core/
+│   │   ├── robot.py         # Ana döngü, sohbet, zamanlanmış görevler
+│   │   ├── state_machine.py # IDLE / LISTENING / PROCESSING / SPEAKING
+│   │   └── esp32_comm.py    # ESP32 UART (göz/ağız ifadeleri)
+│   ├── audio/
+│   │   ├── listener.py      # Wake word (openWakeWord) + STT (Vosk)
+│   │   └── speaker.py       # TTS (pyttsx3 / edge-tts) + ses efektleri
+│   ├── vision/
+│   │   ├── camera.py        # IMX500 / OpenCV kamera, yüz algılama
+│   │   └── face_id.py       # Yüz tanıma, yetkili kullanıcılar
+│   ├── ai/agent.py          # Claude + Ollama sohbet ajanı
+│   ├── services/gmail.py    # Gmail sabah özeti
+│   ├── servo/controller.py  # Kafa pan-tilt servoları
+│   └── display/screen.py    # 3.5" TFT yüz ekranı
 ├── web/                # Flask web dashboard
-│   ├── app.py
-│   ├── templates/
-│   └── static/
 ├── esp32/
 │   ├── eyes/eyes.ino   # Göz animasyon firmware
 │   └── mouth/mouth.ino # Ağız animasyon firmware
-├── docs/               # Dokümantasyon
-├── data/               # Yüz verileri, kullanıcı listesi
+├── data/               # Yüz verileri, kullanıcı listesi, Gmail token
 ├── logs/               # Log dosyaları
-└── models/             # Llama model dosyaları
+└── models/             # Vosk modeli
 ```
 
 ## ESP32 Kurulumu
@@ -93,11 +104,6 @@ Arduino IDE'de gerekli kütüphaneler:
 ## Lisans
 
 MIT License — Muhammed Kaderoğlu
-
-## Kod Yapısı Notu
-
-- `src/` + `main.py` — güncel asyncio tabanlı mimari (durum makinesi, ESP32 UART, Flask kontrol paneli)
-- `core/` — önceki iterasyondan kalan modüller (gmail, yüz tanıma, şaka zamanlayıcı); `src/` ile birleştirilecek
 
 ## Kafa Pan-Tilt Donanımı
 

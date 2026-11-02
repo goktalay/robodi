@@ -6,7 +6,6 @@ import asyncio
 import json
 import logging
 import serial
-import serial.aio
 
 logger = logging.getLogger("robodi.esp32")
 

@@ -12,6 +12,7 @@ import threading
 from pathlib import Path
 
 # ── Logging ──────────────────────────────────────────────────────
+Path("logs").mkdir(exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)-5s] %(name)s: %(message)s",
@@ -37,9 +38,6 @@ async def main():
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    # Log klasörü oluştur
-    Path("logs").mkdir(exist_ok=True)
-
     logger.info("=" * 50)
     logger.info("  ROBODİ v1.0.0 başlatılıyor")
     logger.info("=" * 50)
@@ -48,15 +46,12 @@ async def main():
     from web.app import run_web, set_robot
 
     robot = Robodi(config_path=args.config)
-    robot._loop = asyncio.get_event_loop()
+    robot._loop = asyncio.get_running_loop()
 
     # Web arayüzü ayrı thread'de
     if not args.no_web:
         set_robot(robot)
-        import yaml
-        with open(args.config) as f:
-            cfg = yaml.safe_load(f)
-        web_cfg = cfg.get("robodi", {}).get("web", {})
+        web_cfg = robot.config.get("web", {})
         web_thread = threading.Thread(
             target=run_web,
             kwargs={"host": web_cfg.get("host","0.0.0.0"),
@@ -76,12 +71,16 @@ async def main():
         return
 
     # Graceful shutdown
-    def _shutdown(sig, frame):
-        logger.info(f"Sinyal alındı ({sig}), kapatılıyor...")
-        asyncio.create_task(robot.stop())
+    def _shutdown(sig):
+        logger.info(f"Sinyal alındı ({sig.name}), kapatılıyor...")
+        robot.running = False   # ana döngü biter, finally içinde stop() çalışır
 
-    signal.signal(signal.SIGINT,  _shutdown)
-    signal.signal(signal.SIGTERM, _shutdown)
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, _shutdown, sig)
+        except NotImplementedError:   # Windows
+            pass
 
     try:
         await robot.start()

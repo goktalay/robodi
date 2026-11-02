@@ -23,7 +23,9 @@ audio:
   channels: 2
   chunk_size: 1024
   vad_threshold: 0.5
-  wake_word: "robodi"
+  wake_word_model: "hey_jarvis"   # openWakeWord modeli ("hey robodi" özel modeli eğitilene kadar)
+  wake_word_threshold: 0.5
+  vosk_model: "models/vosk-model-small-tr"
   tts_engine: "pyttsx3"        # veya "edge-tts"
   language: "tr-TR"
 
@@ -35,6 +37,11 @@ vision:
   ai_model: "imx500_mobilenet_ssd"
   detection_confidence: 0.6
   face_tracking: true
+  face_id_interval: 2.0          # kimlik tanıma aralığı (sn)
+  face_id:
+    encodings_file: "data/face_encodings.pkl"
+    users_file: "data/authorized_users.json"
+    tolerance: 0.5
 
 # ─── Display (3.5" TFT) ──────────────────────────────────────────
 display:
@@ -76,10 +83,33 @@ web:
 
 # ─── LLM / AI ────────────────────────────────────────────────────
 ai:
-  provider: "ollama"         # ollama (local) veya openai
-  model: "llama3.2:3b"
-  max_tokens: 512
-  temperature: 0.7
+  provider: "claude"         # claude (online, Ollama yedekli) veya ollama (sadece yerel)
+  max_tokens: 1024
+  history_size: 10           # hatırlanan soru-cevap sayısı
+  claude:
+    model: "claude-opus-5-5" # ANTHROPIC_API_KEY ortam değişkeni gerekir
+    effort: "low"            # sohbet için düşük gecikme
+  ollama:
+    url: "http://localhost:11434"
+    model: "llama3.2:3b"
+    temperature: 0.7
   system_prompt: |
-    Sen ROBODİ'sin, Türkçe konuşan yardımsever bir robot asistansın.
-    Kısa, net ve samimi yanıtlar ver. Çok uzun cevaplar verme.
+    Sen ROBODİ, Muhammed'in masa arkadaşı olan akıllı bir robotsun.
+    Türkçe konuşuyorsun. Samimi, eğlenceli ve yardımseversin.
+    Zaman zaman şaka yapıyorsun. Kısa ve öz cevaplar veriyorsun; yanıtların sesli okunacak.
+
+# ─── Sohbet ──────────────────────────────────────────────────────
+conversation:
+  max_turns: 5               # bir wake word sonrası en fazla soru-cevap
+
+# ─── Zamanlanmış görevler ────────────────────────────────────────
+schedule:
+  morning_summary_hour: 9
+  joke_interval_min: 60      # dakika; 0 = şakalar kapalı
+  joke_interval_max: 120
+
+# ─── Gmail (sabah özeti) ─────────────────────────────────────────
+gmail:
+  enabled: true
+  credentials_file: "data/gmail_credentials.json"
+  token_file: "data/gmail_token.json"
