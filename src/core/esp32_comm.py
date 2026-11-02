@@ -5,7 +5,11 @@ Göz LED matrix ve ağız animasyonu kontrolü.
 import asyncio
 import json
 import logging
-import serial
+
+try:
+    import serial
+except ImportError:   # pyserial yoksa simülasyon modu
+    serial = None
 
 logger = logging.getLogger("robodi.esp32")
 
@@ -25,11 +29,14 @@ class ESP32Comm:
     def __init__(self, config: dict):
         self.port     = config.get("port", "/dev/ttyAMA0")
         self.baud     = config.get("baud_rate", 115200)
-        self._serial: serial.Serial | None = None
+        self._serial = None
         self._lock    = asyncio.Lock()
         self._current_expression = "idle"
 
     async def connect(self):
+        if serial is None:
+            logger.warning("pyserial kurulu değil, ESP32 simülasyon modunda.")
+            return
         try:
             self._serial = serial.Serial(
                 self.port, self.baud, timeout=1
