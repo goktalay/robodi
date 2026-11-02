@@ -30,9 +30,14 @@ Raspberry Pi 5 tabanlı, AI destekli akıllı masa robotu.
 ```bash
 git clone https://github.com/goktalay/robodi.git
 cd robodi
-chmod +x setup.sh
-./setup.sh
+./scripts/setup.sh
 ```
+
+Tek kurulum betiği `scripts/setup.sh`'tır. Sistem paketlerini (dlib derlemesi için cmake/boost dahil)
+ve `requirements.txt`'yi sistem Python'una `--break-system-packages` ile kurar (venv kullanılmaz),
+Vosk Türkçe modelini ve Ollama'yı indirir, `data/` klasörünü ve `.env` dosyasını oluşturur,
+`robodi.service` systemd servisini depo dizini ve mevcut kullanıcıyla yazıp etkinleştirir.
+`face_recognition` için dlib derlemesi Pi 5'te uzun sürebilir.
 
 ## Yapılandırma
 
