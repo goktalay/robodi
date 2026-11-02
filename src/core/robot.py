@@ -32,6 +32,7 @@ class Robodi:
     """ROBODİ ana robot sınıfı."""
 
     def __init__(self, config_path: str = "config/settings.yaml"):
+        self.config_path = config_path
         self.config = self._load_config(config_path)
         self.state = StateMachine(initial=RobodiState.IDLE)
         self.running = False
@@ -207,6 +208,30 @@ class Robodi:
     def _set_face(self, expression: str):
         self.display.show_face(expression)
         self.esp32.set_expression(expression)
+
+    # ── Panel için durum özeti ───────────────────────────────────
+
+    def status(self) -> dict:
+        """Web panelinin gösterdiği alt sistem durumları."""
+        cam_mode = getattr(self.camera, "_mode", "sim")
+        serial_port = getattr(self.esp32, "_serial", None)
+        if getattr(self.ai, "_claude", None):
+            ai = f"Claude ({self.ai.claude_model})"
+        else:
+            ai = f"Ollama ({self.ai.ollama_model})"
+        return {
+            "state":        self.state.current.name,
+            "running":      self.running,
+            "current_user": self.current_user_info.get("name") or self.current_user,
+            "conversation": self.state.current != RobodiState.IDLE,
+            "camera":       {"picamera2": "IMX500", "opencv": "USB/OpenCV"}.get(cam_mode, "Simülasyon"),
+            "microphone":   "Hazır" if getattr(self.audio, "_pa", None) else "Simülasyon",
+            "wake_word":    self.audio.ww_model_name if getattr(self.audio, "_oww", None) else "Kapalı",
+            "esp32":        "Bağlı" if serial_port is not None and serial_port.is_open else "Simülasyon",
+            "ai":           ai,
+            "gmail":        "Hazır" if self.gmail.is_ready() else "Kapalı",
+            "servos":       dict(getattr(self.servos, "_positions", {})),
+        }
 
     # ── Yüz Takip / Tanıma ───────────────────────────────────────
 

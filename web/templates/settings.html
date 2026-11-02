@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Ayarlar{% endblock %}
+{% block header %}Ayarlar{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <h2 class="card-title" style="margin:0">⚙️ <span id="settingsPath">config/settings.yaml</span></h2>
+    <div class="input-row" style="flex:0 0 auto">
+      <button class="btn btn-secondary" onclick="loadSettings()">↺ Geri Al</button>
+      <button class="btn btn-primary" id="saveBtn" onclick="saveSettings()">💾 Kaydet</button>
+    </div>
+  </div>
+  <p class="info-text">
+    Tüm robot ayarları bu dosyada: donanım pinleri, ses, kamera, yapay zekâ modeli, şaka aralığı,
+    sabah özeti saati ve Gmail. Yorum satırları korunur; kaydetmeden önce dosya doğrulanır ve eski
+    hâli <code>.bak</code> olarak saklanır. Değişiklikler robot yeniden başlatılınca geçerli olur
+    (<code>sudo systemctl restart robodi</code>).
+  </p>
+  <div id="settingsError" class="alert alert-error hidden"></div>
+  <textarea id="settingsText" class="input settings-editor" spellcheck="false"
+            oninput="markDirty()"></textarea>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let original = "";
+
+function markDirty() {
+  const dirty = document.getElementById("settingsText").value !== original;
+  document.getElementById("saveBtn").disabled = !dirty;
+}
+
+function showError(msg) {
+  const el = document.getElementById("settingsError");
+  el.textContent = msg || "";
+  el.classList.toggle("hidden", !msg);
+}
+
+async function loadSettings() {
+  try {
+    const d = await (await fetch("/api/settings")).json();
+    original = d.text || "";
+    document.getElementById("settingsText").value = original;
+    document.getElementById("settingsPath").textContent = d.path || "config/settings.yaml";
+    showError("");
+    markDirty();
+  } catch { showError("Ayarlar okunamadı."); }
+}
+
+async function saveSettings() {
+  const text = document.getElementById("settingsText").value;
+  const r = await fetch("/api/settings", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({text})
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.ok) { showError(d.error || "Kaydedilemedi."); return; }
+  original = text;
+  showError("");
+  markDirty();
+  showToast("✅ Kaydedildi — robotu yeniden başlatınca geçerli olur");
+}
+
+// Tab tuşu girinti eklesin
+document.getElementById("settingsText").addEventListener("keydown", e => {
+  if (e.key !== "Tab") return;
+  e.preventDefault();
+  const t = e.target, s = t.selectionStart;
+  t.setRangeText("  ", s, t.selectionEnd, "end");
+  markDirty();
+});
+
+window.addEventListener("beforeunload", e => {
+  if (document.getElementById("settingsText").value !== original) e.preventDefault();
+});
+
+loadSettings();
+</script>
+{% endblock %}

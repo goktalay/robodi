@@ -120,12 +120,24 @@ def settings():
 
 @app.route("/api/status")
 def api_status():
-    state = _robot.state.current.name if _robot else "OFFLINE"
-    return jsonify({
-        "state":   state,
-        "running": _robot.running if _robot else False,
-        "servos":  _robot.servos._positions if _robot else {},
-    })
+    if _robot is None:
+        data = {"state": "OFFLINE", "running": False, "servos": {}}
+    elif hasattr(_robot, "status"):
+        data = _robot.status()
+    else:   # eski/sahte robot nesneleri
+        data = {"state": _robot.state.current.name, "running": _robot.running,
+                "servos": getattr(_robot.servos, "_positions", {})}
+    data["cpu_temp"] = _cpu_temp()
+    return jsonify(data)
+
+
+def _cpu_temp():
+    """Raspberry Pi CPU sıcaklığı (°C); okunamazsa None."""
+    try:
+        with open("/sys/class/thermal/thermal_zone0/temp") as f:
+            return round(int(f.read().strip()) / 1000, 1)
+    except (OSError, ValueError):
+        return None
 
 
 @app.route("/api/servo", methods=["POST"])
@@ -174,28 +186,67 @@ async def api_snapshot():
     return jsonify({"error": "Kamera yok"}), 404
 
 
+LOG_FILE      = "logs/robodi.log"
+LOG_MAX_LINES = 1000
+ANSI_RE       = re.compile(r"\x1b\[[0-9;]*m")
+
+
 @app.route("/api/logs")
 def api_logs():
-    """Son 100 log satırını döndür."""
+    """Son N log satırını döndür (?lines=, varsayılan 200, en fazla 1000)."""
     try:
-        with open("logs/robodi.log") as f:
-            lines = f.readlines()[-100:]
-        return jsonify({"lines": lines})
+        n = max(1, min(int(request.args.get("lines", 200)), LOG_MAX_LINES))
+    except ValueError:
+        n = 200
+    try:
+        with open(LOG_FILE, encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()[-n:]
+        return jsonify({"lines": [ANSI_RE.sub("", l).rstrip("\n") for l in lines]})
     except FileNotFoundError:
         return jsonify({"lines": []})
 
 
+# ── Ayarlar ───────────────────────────────────────────────────────
+
+REQUIRED_SECTIONS = ("gpio", "audio", "vision", "display", "esp32", "web", "ai")
+
+
+def _settings_path() -> str:
+    return getattr(_robot, "config_path", None) or "config/settings.yaml"
+
+
 @app.route("/api/settings", methods=["GET", "POST"])
 def api_settings():
-    cfg_path = "config/settings.yaml"
+    """settings.yaml'ı metin olarak oku/yaz; yorumlar korunur, kaydetmeden önce doğrulanır."""
+    path = _settings_path()
     if request.method == "GET":
-        with open(cfg_path) as f:
-            return jsonify(yaml.safe_load(f))
-    else:
-        new_cfg = request.json
-        with open(cfg_path, "w") as f:
-            yaml.dump(new_cfg, f, allow_unicode=True)
-        return jsonify({"ok": True})
+        with open(path, encoding="utf-8") as f:
+            return jsonify({"path": path, "text": f.read()})
+
+    text = (request.get_json(silent=True) or {}).get("text")
+    if not isinstance(text, str) or not text.strip():
+        return jsonify({"ok": False, "error": "Boş ayar metni"}), 400
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as e:
+        return jsonify({"ok": False, "error": f"YAML hatası: {e}"}), 400
+    if not isinstance(data, dict):
+        return jsonify({"ok": False, "error": "Ayar dosyası bir sözlük (anahtar: değer) olmalı"}), 400
+    missing = [k for k in REQUIRED_SECTIONS if not isinstance(data.get(k), dict)]
+    if missing:
+        return jsonify({"ok": False, "error": "Eksik bölüm(ler): " + ", ".join(missing)}), 400
+
+    try:
+        with open(path, encoding="utf-8") as f:
+            old = f.read()
+        with open(path + ".bak", "w", encoding="utf-8") as f:
+            f.write(old)
+    except FileNotFoundError:
+        pass
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+    logger.info("Ayarlar web panelinden güncellendi (yedek: %s.bak).", path)
+    return jsonify({"ok": True, "restart_required": True})
 
 
 # ── Kullanıcı yönetimi ───────────────────────────────────────────
@@ -278,4 +329,7 @@ def api_user_add():
 
 
 def run_web(host="0.0.0.0", port=8080):
+    # Her istek için erişim satırı yazılmasın; panel birkaç saniyede bir durum sorguluyor
+    # ve bu satırlar robodi.log'u doldurup robot loglarını gömüyordu.
+    logging.getLogger("werkzeug").setLevel(logging.WARNING)
     app.run(host=host, port=port, debug=False, threaded=True)

@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Loglar{% endblock %}
+{% block header %}Loglar{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header log-toolbar">
+    <div class="input-row">
+      <input class="input" id="logSearch" type="search" placeholder="Ara (ör. esp32, Kullanıcı)" oninput="render()">
+      <select class="input" id="logLevel" onchange="render()" style="max-width:160px">
+        <option value="">Tüm seviyeler</option>
+        <option value="ERROR">Sadece hatalar</option>
+        <option value="WARN">Uyarı ve hatalar</option>
+      </select>
+      <select class="input" id="logCount" onchange="loadLogs()" style="max-width:120px">
+        <option value="200">Son 200</option>
+        <option value="500">Son 500</option>
+        <option value="1000">Son 1000</option>
+      </select>
+    </div>
+    <div class="input-row" style="flex:0 0 auto">
+      <label class="toggle"><input type="checkbox" id="autoRefresh" checked onchange="schedule()"> Canlı</label>
+      <button class="btn btn-secondary btn-sm" onclick="loadLogs()">↻ Yenile</button>
+    </div>
+  </div>
+  <div class="log-container log-full" id="logBox">
+    <div class="log-line">Yükleniyor...</div>
+  </div>
+  <div class="info-text" id="logInfo"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let lines = [];
+let timer = null;
+
+function levelOf(line) {
+  if (/\b(ERROR|CRITICAL)\b/.test(line)) return "ERROR";
+  if (/\bWARN(ING)?\b/.test(line)) return "WARN";
+  return "INFO";
+}
+
+function render() {
+  const box = document.getElementById("logBox");
+  const q = document.getElementById("logSearch").value.trim().toLowerCase();
+  const lvl = document.getElementById("logLevel").value;
+  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+
+  const shown = lines.filter(l => {
+    const lv = levelOf(l);
+    if (lvl === "ERROR" && lv !== "ERROR") return false;
+    if (lvl === "WARN" && lv === "INFO") return false;
+    return !q || l.toLowerCase().includes(q);
+  });
+
+  box.replaceChildren(...shown.map(l => {
+    const div = document.createElement("div");
+    const lv = levelOf(l);
+    div.className = "log-line" + (lv === "ERROR" ? " log-error" : lv === "WARN" ? " log-warn" :
+                    /ROBODİ:|TTS:|Kullanıcı:/.test(l) ? " log-robot" : "");
+    div.textContent = l;
+    return div;
+  }));
+  if (!shown.length) box.innerHTML = '<div class="log-line">Gösterilecek log satırı yok.</div>';
+  document.getElementById("logInfo").textContent = `${shown.length} / ${lines.length} satır`;
+  if (atBottom) box.scrollTop = box.scrollHeight;
+}
+
+async function loadLogs() {
+  try {
+    const n = document.getElementById("logCount").value;
+    const d = await (await fetch("/api/logs?lines=" + n)).json();
+    lines = d.lines || [];
+    render();
+  } catch { showToast("⚠️ Loglar alınamadı"); }
+}
+
+function schedule() {
+  clearInterval(timer);
+  if (document.getElementById("autoRefresh").checked) timer = setInterval(loadLogs, 3000);
+}
+
+loadLogs().then(() => {
+  const box = document.getElementById("logBox");
+  box.scrollTop = box.scrollHeight;
+});
+schedule();
+</script>
+{% endblock %}
