@@ -3,10 +3,13 @@
 {% block header %}Kullanıcı Yönetimi{% endblock %}
 
 {% block content %}
+{% if not robot_online %}
+<div class="alert alert-error">🔌 Robot çevrimdışı — kullanıcı listesi ve yüz kaydı için robotun çalışıyor olması gerekir.</div>
+{% endif %}
 <div class="card">
   <div class="card-header">
     <h2 class="card-title">👥 Yetkili Kullanıcılar</h2>
-    <button class="btn btn-primary" onclick="showAddModal()">+ Kullanıcı Ekle</button>
+    <button class="btn btn-primary" onclick="showAddModal()" {% if not robot_online %}disabled{% endif %}>+ Kullanıcı Ekle</button>
   </div>
   <div id="usersList" class="users-grid">
     <div class="loading">Yükleniyor...</div>
@@ -21,7 +24,7 @@
       <button class="modal-close" onclick="hideModal()">×</button>
     </div>
     <div class="modal-body">
-      <p class="info-text">Kullanıcıyı eklemek için kameraya bakmasını sağlayın ve formu doldurun.</p>
+      <p class="info-text">Kişi robotun kamerasına baksın; "Kullanıcı Ekle"ye basınca robot birkaç kare alıp yüz kaydı oluşturur.</p>
       <div class="form-group">
         <label>Kullanıcı Adı</label>
         <input type="text" id="newUsername" class="input" placeholder="ornek: muhammed">
@@ -41,21 +44,10 @@
           <option value="admin">Admin</option>
         </select>
       </div>
-      <div class="camera-preview">
-        <video id="cameraPreview" autoplay></video>
-        <div class="camera-overlay">
-          <div class="face-guide"></div>
-        </div>
-        <button class="btn btn-secondary" id="captureBtn" onclick="captureFaces()">📸 Yüz Tarama Başlat</button>
-        <div id="captureProgress" class="progress hidden">
-          <div class="progress-bar" id="progressBar"></div>
-          <span id="progressText">0/5 fotoğraf</span>
-        </div>
-      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="hideModal()">İptal</button>
-      <button class="btn btn-primary" onclick="addUser()" id="addBtn" disabled>Kullanıcı Ekle</button>
+      <button class="btn btn-primary" onclick="addUser()" id="addBtn">📸 Kullanıcı Ekle</button>
     </div>
   </div>
 </div>
@@ -63,14 +55,18 @@
 
 {% block scripts %}
 <script>
-let capturedFrames = 0;
-let captureInterval = null;
-let stream = null;
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 
 async function loadUsers() {
+  const container = document.getElementById('usersList');
   const r = await fetch('/api/users');
   const users = await r.json();
-  const container = document.getElementById('usersList');
+  if (!r.ok) {
+    container.innerHTML = `<div class="empty-state">${esc(users.error || 'Kullanıcılar alınamadı')}</div>`;
+    return;
+  }
 
   if (Object.keys(users).length === 0) {
     container.innerHTML = '<div class="empty-state">Henüz kullanıcı yok</div>';
@@ -79,16 +75,15 @@ async function loadUsers() {
 
   container.innerHTML = Object.entries(users).map(([username, info]) => `
     <div class="user-card">
-      <div class="user-avatar">${info.name ? info.name[0].toUpperCase() : '?'}</div>
+      <div class="user-avatar">${esc(info.name ? info.name[0].toUpperCase() : '?')}</div>
       <div class="user-info">
-        <div class="user-name">${info.name || username}</div>
-        <div class="user-username">@${username}</div>
-        <div class="user-role badge ${info.role === 'admin' ? 'badge-admin' : 'badge-user'}">${info.role || 'user'}</div>
+        <div class="user-name">${esc(info.name || username)}</div>
+        <div class="user-username">@${esc(username)}</div>
+        <div class="user-role badge ${info.role === 'admin' ? 'badge-admin' : 'badge-user'}">${esc(info.role || 'user')}</div>
       </div>
-      <div class="user-greeting">"${info.greeting || ''}"</div>
+      <div class="user-greeting">"${esc(info.greeting)}"</div>
       <div class="user-actions">
-        <button class="btn btn-sm btn-secondary" onclick="editUser('${username}', ${JSON.stringify(info).replace(/"/g, '&quot;')})">✏️ Düzenle</button>
-        ${username !== 'admin' ? `<button class="btn btn-sm btn-danger" onclick="deleteUser('${username}')">🗑️ Sil</button>` : ''}
+        ${username !== 'admin' ? `<button class="btn btn-sm btn-danger" data-username="${esc(username)}" onclick="deleteUser(this.dataset.username)">🗑️ Sil</button>` : ''}
       </div>
     </div>
   `).join('');
@@ -96,7 +91,7 @@ async function loadUsers() {
 
 async function deleteUser(username) {
   if (!confirm(`"${username}" kullanıcısını silmek istediğinizden emin misiniz?`)) return;
-  const r = await fetch(`/api/users/${username}`, {method: 'DELETE'});
+  const r = await fetch(`/api/users/${encodeURIComponent(username)}`, {method: 'DELETE'});
   const d = await r.json();
   showToast(d.success ? `✅ ${username} silindi` : `❌ ${d.error}`);
   if (d.success) loadUsers();
@@ -104,30 +99,10 @@ async function deleteUser(username) {
 
 function showAddModal() {
   document.getElementById('addModal').classList.remove('hidden');
-  startCamera();
 }
 
 function hideModal() {
   document.getElementById('addModal').classList.add('hidden');
-  stopCamera();
-  capturedFrames = 0;
-  clearInterval(captureInterval);
-}
-
-async function startCamera() {
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({video: true});
-    document.getElementById('cameraPreview').srcObject = stream;
-  } catch(e) {
-    showToast('❌ Kamera açılamadı');
-  }
-}
-
-function stopCamera() {
-  if (stream) {
-    stream.getTracks().forEach(t => t.stop());
-    stream = null;
-  }
 }
 
 async function addUser() {
@@ -141,16 +116,24 @@ async function addUser() {
     return;
   }
 
-  const r = await fetch('/api/users/add', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({username, name, greeting, role})
-  });
-  const d = await r.json();
-  showToast(d.success ? `✅ ${name} eklendi` : `❌ ${d.error}`);
-  if (d.success) {
-    hideModal();
-    loadUsers();
+  const btn = document.getElementById('addBtn');
+  btn.disabled = true;
+  btn.textContent = '📸 Yüz taranıyor...';
+  try {
+    const r = await fetch('/api/users/add', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username, name, greeting, role})
+    });
+    const d = await r.json();
+    showToast(d.success ? `✅ ${name} eklendi` : `❌ ${d.error}`);
+    if (d.success) {
+      hideModal();
+      loadUsers();
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📸 Kullanıcı Ekle';
   }
 }
 

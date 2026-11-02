@@ -14,7 +14,7 @@
       <p>Masa Arkadaşı Kontrol Paneli</p>
     </div>
     <div class="login-card">
-      <form method="POST" action="/login">
+      <form method="POST" action="{{ url_for('login', next=request.args.get('next')) }}">
         {% if error %}
         <div class="alert alert-error">{{ error }}</div>
         {% endif %}
