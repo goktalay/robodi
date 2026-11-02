@@ -31,6 +31,10 @@ Konuşma dili ve kod yorumları **Türkçe**.
 - Web paneli girişi zorunlu: şifre `ROBODI_ADMIN_PASSWORD` (tanımsızsa giriş kapalı), oturum anahtarı
   `ROBODI_SECRET_KEY` (yedek: `web.secret_key`). Kullanıcı ekleme robotun kamerasından kare alır
   (`/api/users/add` → `FaceIdentifier.add_user`). Testler: `python -m pytest tests/` (Flask, numpy, pytest yeterli).
+- Panel sayfaları (Panel, Kullanıcılar, Loglar, Ayarlar) hep `base.html`'i genişletir; stiller tek dosyada
+  (`web/static/css/style.css`). Panel durumu `Robodi.status()`'tan gelir (`/api/status`). Ayarlar sayfası
+  `settings.yaml`'ı metin olarak düzenler: kaydetmeden önce YAML ve zorunlu bölümler doğrulanır, eski hâl
+  `.bak` olarak saklanır, yorumlar korunur. werkzeug erişim logları kapalı (panel sorguları logu doldurmasın).
 - Kişisel veriler (`data/`: yüz kodlamaları, yetkili kullanıcılar, Gmail token) git'e girmez.
 - Tüm ayarlar `config/settings.yaml`; koda sabit pin/port gömme.
 
@@ -69,11 +73,10 @@ python main.py --web-only         # sadece panel (geliştirme makinesinde)
 
 ## Açık işler
 
-1. `web/templates/logs.html`, `settings.html` eksik; `web/app.py` rotaları var.
-2. `assets/faces/*.png` ifade görselleri yok (`src/display/screen.py` metin fallback kullanıyor).
-3. MG996R için `src/servo/controller.py` `angle_to_duty` sınırları (2.5–12.5 %) donanımda kalibre edilecek.
-4. Özel "hey robodi" openWakeWord modeli eğitilecek (`audio.wake_word_model`).
-5. `esp32/mouth/mouth.ino` OLED ağız animasyonu tamamlanacak.
+1. `assets/faces/*.png` ifade görselleri yok (`src/display/screen.py` metin fallback kullanıyor).
+2. MG996R için `src/servo/controller.py` `angle_to_duty` sınırları (2.5–12.5 %) donanımda kalibre edilecek.
+3. Özel "hey robodi" openWakeWord modeli eğitilecek (`audio.wake_word_model`).
+4. `esp32/mouth/mouth.ino` OLED ağız animasyonu tamamlanacak.
 
 ## Kurallar
 
