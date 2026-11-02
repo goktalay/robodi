@@ -1,22 +1,40 @@
 #!/bin/bash
 # ROBODİ Kurulum Scripti - Raspberry Pi 5
+# Kullanım: ./scripts/setup.sh  (depo içinde herhangi bir yerden çalıştırılabilir)
+#
+# Python yöntemi: sistem Python'u + pip --break-system-packages.
+# venv kullanılmaz; picamera2/libcamera RPi OS'ta sistem paketleriyle gelir.
 set -e
+
+# Depo kök dizinine geç (betik scripts/ altında)
+ROBODI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROBODI_USER="$(id -un)"
+cd "$ROBODI_DIR"
+
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  ROBODİ Kurulum Scripti"
+echo "  Dizin: $ROBODI_DIR  Kullanıcı: $ROBODI_USER"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # Sistem bağımlılıkları
 sudo apt-get update -qq
 sudo apt-get install -y \
-  python3-pip python3-venv \
+  python3-pip python3-dev \
   libportaudio2 libportaudio-dev \
   portaudio19-dev \
   mpg123 alsa-utils \
+  espeak flac ffmpeg \
   libatlas-base-dev \
   libopenblas-dev \
   python3-opencv \
   i2c-tools \
-  libgpiod2
+  libgpiod2 \
+  wget unzip curl
+
+# face_recognition → dlib kaynaktan derlenir (Pi 5'te ~15-30 dk sürebilir)
+sudo apt-get install -y \
+  cmake build-essential \
+  libboost-all-dev
 
 # SPI ve UART etkinleştir
 sudo raspi-config nonint do_spi 0
@@ -44,21 +62,38 @@ if ! command -v ollama &> /dev/null; then
   ollama pull llama3.2:3b
 fi
 
-# Log ve assets klasörleri
-mkdir -p logs assets/sounds assets/faces
+# Kişisel veri, log ve assets klasörleri (data/ git'e girmez)
+mkdir -p data logs assets/sounds assets/faces
+
+# .env dosyası
+if [ ! -f .env ]; then
+  cp .env.example .env
+  echo "⚠️  .env oluşturuldu, API anahtarlarını girin: nano .env"
+fi
+
+# Eski ayrı web servisi varsa kaldır (web paneli artık robodi.service içinde)
+sudo systemctl disable --now robodi-web.service 2>/dev/null || true
+sudo rm -f /etc/systemd/system/robodi-web.service
 
 # Systemd servis
 sudo tee /etc/systemd/system/robodi.service > /dev/null <<EOF
 [Unit]
-Description=ROBODİ Robot Service
-After=network.target
+Description=ROBODİ - Masa Arkadaşı Robot
+After=network-online.target sound.target
+Wants=network-online.target
 
 [Service]
-ExecStart=/usr/bin/python3 /home/pi/robodi/main.py
-WorkingDirectory=/home/pi/robodi
+Type=simple
+User=$ROBODI_USER
+Group=$ROBODI_USER
+WorkingDirectory=$ROBODI_DIR
+Environment=PYTHONPATH=$ROBODI_DIR
+EnvironmentFile=-$ROBODI_DIR/.env
+ExecStart=/usr/bin/python3 $ROBODI_DIR/main.py
 Restart=on-failure
-User=pi
-Environment=PYTHONPATH=/home/pi/robodi
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
@@ -69,5 +104,9 @@ sudo systemctl enable robodi
 
 echo ""
 echo "✅ Kurulum tamamlandı!"
-echo "Başlatmak için: sudo systemctl start robodi"
-echo "Web arayüzü:    http://$(hostname -I | cut -d' ' -f1):8080"
+echo ""
+echo "Sonraki adımlar:"
+echo "1. nano .env                        → API anahtarlarını girin"
+echo "2. python3 -m src.services.gmail    → Gmail yetkisi (bir kez, tarayıcıyla)"
+echo "3. sudo systemctl start robodi      → başlat"
+echo "4. http://$(hostname -I | cut -d' ' -f1):8080  → web paneli (yüz kaydı)"
