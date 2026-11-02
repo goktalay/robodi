@@ -28,6 +28,9 @@ Konuşma dili ve kod yorumları **Türkçe**.
   ulaşılamazsa Ollama `llama3.2:3b` (`POST localhost:11434/api/chat`) yedek; `provider: ollama` sadece yerel.
 - Yüz kimliği `src/vision/face_id.py` (Camera karesini kullanır, kendi kamerasını açmaz);
   Gmail özeti `src/services/gmail.py` (ilk yetki: `python -m src.services.gmail`).
+- Web paneli girişi zorunlu: şifre `ROBODI_ADMIN_PASSWORD` (tanımsızsa giriş kapalı), oturum anahtarı
+  `ROBODI_SECRET_KEY` (yedek: `web.secret_key`). Kullanıcı ekleme robotun kamerasından kare alır
+  (`/api/users/add` → `FaceIdentifier.add_user`). Testler: `python -m pytest tests/` (Flask, numpy, pytest yeterli).
 - Kişisel veriler (`data/`: yüz kodlamaları, yetkili kullanıcılar, Gmail token) git'e girmez.
 - Tüm ayarlar `config/settings.yaml`; koda sabit pin/port gömme.
 
@@ -66,12 +69,11 @@ python main.py --web-only         # sadece panel (geliştirme makinesinde)
 
 ## Açık işler
 
-1. Birleştirmenin kalanı: web panelinde kullanıcı yönetimi (`login.html`/`users.html` şablonları var, `web/app.py` rotası yok).
-2. `web/templates/logs.html`, `settings.html` eksik; `web/app.py` rotaları var.
-3. `assets/faces/*.png` ifade görselleri yok (`src/display/screen.py` metin fallback kullanıyor).
-4. MG996R için `src/servo/controller.py` `angle_to_duty` sınırları (2.5–12.5 %) donanımda kalibre edilecek.
-5. Özel "hey robodi" openWakeWord modeli eğitilecek (`audio.wake_word_model`).
-6. `esp32/mouth/mouth.ino` OLED ağız animasyonu tamamlanacak.
+1. `web/templates/logs.html`, `settings.html` eksik; `web/app.py` rotaları var.
+2. `assets/faces/*.png` ifade görselleri yok (`src/display/screen.py` metin fallback kullanıyor).
+3. MG996R için `src/servo/controller.py` `angle_to_duty` sınırları (2.5–12.5 %) donanımda kalibre edilecek.
+4. Özel "hey robodi" openWakeWord modeli eğitilecek (`audio.wake_word_model`).
+5. `esp32/mouth/mouth.ino` OLED ağız animasyonu tamamlanacak.
 
 ## Kurallar
 
