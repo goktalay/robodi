@@ -28,7 +28,7 @@ Raspberry Pi 5 tabanlı, AI destekli akıllı masa robotu.
 ## Kurulum
 
 ```bash
-git clone https://github.com/mkaderoglu/robodi.git
+git clone https://github.com/goktalay/robodi.git
 cd robodi
 chmod +x setup.sh
 ./setup.sh
