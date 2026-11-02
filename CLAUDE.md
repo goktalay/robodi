@@ -7,14 +7,9 @@ Konuşma dili ve kod yorumları **Türkçe**.
 
 - Donanım henüz tam elde değil; kod **simülasyon modunda** çalışabilmeli (RPi.GPIO, PyAudio,
   Picamera2, pyserial yoksa modüller loglayıp devam eder — bu davranışı koru).
-- Repoda iki iskelet var, **birleştirilecek**:
-  - `src/` + `main.py` — güncel hedef mimari: asyncio, durum makinesi, ESP32 UART (JSON),
-    Flask kontrol paneli (`web/app.py`, port 8080).
-  - `core/` — önceki iterasyon: gmail özeti, yüz tanıma/kullanıcı kaydı, şaka zamanlayıcı,
-    `schedule` tabanlı senkron döngü, web dashboard (login/users sayfaları, port 5000).
-  - Birleştirme kuralı: `src/` mimarisi esas; `core/`'daki işlevler (gmail, yüz tanıma, şakalar,
-    kullanıcı yönetimi) `src/` altına asyncio uyumlu modüller olarak taşınır, sonra `core/` silinir.
-    Tek `setup.sh` (scripts/setup.sh esas), tek systemd servisi, tek web paneli kalsın.
+- `core/` → `src/` birleştirmesi yapıldı (2026-11-03): tek giriş noktası `main.py`, tek systemd
+  servisi (`robodi.service` → `main.py`), web paneli aynı süreçte (port 8080). `core/` silindi.
+  Birleştirme kuralının kalan kısmı için "Açık işler"e bak.
 
 ## Mimari
 
@@ -25,8 +20,13 @@ Konuşma dili ve kod yorumları **Türkçe**.
 - ESP32 ile UART `/dev/ttyAMA0` 115200, satır sonlu JSON: `{"cmd":"EXPRESSION","eyes":"happy"}`.
   Komutlar: EXPRESSION, BLINK, BRIGHTNESS, INIT, SLEEP. Yeni komut eklenirse hem
   `src/core/esp32_comm.py` hem `esp32/eyes/eyes.ino` güncellenir.
-- STT: Vosk offline (`models/vosk-model-small-tr`). TTS: pyttsx3 (offline) / edge-tts `tr-TR-AhmetNeural`.
-- LLM: Ollama `llama3.2:3b` lokal (`POST localhost:11434/api/generate`); Claude API opsiyonel.
+- Wake word: openWakeWord (`src/audio/listener.py`, şimdilik `hey_jarvis` modeli).
+  STT: Vosk offline (`models/vosk-model-small-tr`). TTS: pyttsx3 (offline) / edge-tts `tr-TR-AhmetNeural`.
+- LLM (`src/ai/agent.py`): `ai.provider: claude` ise Claude API (`ANTHROPIC_API_KEY` gerekir),
+  ulaşılamazsa Ollama `llama3.2:3b` (`POST localhost:11434/api/chat`) yedek; `provider: ollama` sadece yerel.
+- Yüz kimliği `src/vision/face_id.py` (Camera karesini kullanır, kendi kamerasını açmaz);
+  Gmail özeti `src/services/gmail.py` (ilk yetki: `python -m src.services.gmail`).
+- Kişisel veriler (`data/`: yüz kodlamaları, yetkili kullanıcılar, Gmail token) git'e girmez.
 - Tüm ayarlar `config/settings.yaml`; koda sabit pin/port gömme.
 
 ## Pin haritası (Raspberry Pi 5, BCM)
@@ -64,11 +64,12 @@ python main.py --web-only         # sadece panel (geliştirme makinesinde)
 
 ## Açık işler
 
-1. `core/` → `src/` birleştirme (yukarıdaki kural).
+1. Birleştirmenin kalanı: tek kurulum betiği (`scripts/setup.sh` esas; kökteki `setup.sh` ile birleştirilecek),
+   web panelinde kullanıcı yönetimi (`login.html`/`users.html` şablonları var, `web/app.py` rotası yok).
 2. `web/templates/logs.html`, `settings.html` eksik; `web/app.py` rotaları var.
 3. `assets/faces/*.png` ifade görselleri yok (`src/display/screen.py` metin fallback kullanıyor).
 4. MG996R için `src/servo/controller.py` `angle_to_duty` sınırları (2.5–12.5 %) donanımda kalibre edilecek.
-5. Vosk wake-word tespiti `src/audio/listener.py` içinde placeholder.
+5. Özel "hey robodi" openWakeWord modeli eğitilecek (`audio.wake_word_model`).
 6. `esp32/mouth/mouth.ino` OLED ağız animasyonu tamamlanacak.
 
 ## Kurallar
