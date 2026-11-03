@@ -5,8 +5,10 @@ Konuşma dili ve kod yorumları **Türkçe**.
 
 ## Mevcut durum (2026-11-03)
 
-- Donanım henüz tam elde değil; kod **simülasyon modunda** çalışabilmeli (RPi.GPIO, PyAudio,
-  Picamera2, pyserial yoksa modüller loglayıp devam eder — bu davranışı koru).
+- Donanım satın alındı, henüz monte edilmedi; kod **simülasyon modunda** çalışabilmeli (servokit,
+  PyAudio, Picamera2, pyserial yoksa modüller loglayıp devam eder — bu davranışı koru).
+- Donanım kararları ve malzeme listesi teslim dosyasında (tasarım/elektronik/yazılım):
+  https://claude.ai/artifact/8TQMM8cfHA8NmkyNqxhXDY
 - `core/` → `src/` birleştirmesi yapıldı (2026-11-03): tek giriş noktası `main.py`, tek systemd
   servisi (`robodi.service` → `main.py`), web paneli aynı süreçte (port 8080). `core/` silindi.
   Birleştirme kuralının kalan kısmı için "Açık işler"e bak.
@@ -19,9 +21,15 @@ Konuşma dili ve kod yorumları **Türkçe**.
   (`src/core/state_machine.py`). Geçişler `TRANSITIONS` sözlüğünde; yeni durum eklerken orayı güncelle.
 - `src/core/robot.py` orkestratör. Bloklayan I/O her zaman `run_in_executor` ile.
 - Flask ayrı thread'de; asyncio döngüsüne `asyncio.run_coroutine_threadsafe` ile köprü.
-- ESP32 ile UART `/dev/ttyAMA0` 115200, satır sonlu JSON: `{"cmd":"EXPRESSION","eyes":"happy"}`.
-  Komutlar: EXPRESSION, BLINK, BRIGHTNESS, INIT, SLEEP. Yeni komut eklenirse hem
-  `src/core/esp32_comm.py` hem `esp32/eyes/eyes.ino` güncellenir.
+- Servolar PCA9685 üzerinden (`src/servo/controller.py`, `adafruit-circuitpython-servokit`), I2C 0x40.
+  Kanal, açı sınırı, offset, darbe aralığı ve yön `settings.yaml → servos.channels`'ta. Beş servo:
+  `head_pan`, `head_tilt`, `left_arm`, `right_arm`, `waist` (gövde ±90°). Yüz takibinde kafa
+  `servos.waist_handoff` derecesini geçince gövde kişiye döner, kafa geri gelir (`Robodi._waist_handoff`).
+- ESP32 ekran kartları USB ile (`src/core/esp32_comm.py`): eyes, mouth, chest. `esp32.boards: auto` ise
+  portlar `{"cmd":"WHO"}` ile taranır. 115200, satır sonlu JSON; her karta yalnızca kendi alanı gider.
+  Komutlar: WHO, INIT, EXPRESSION, BLINK, BRIGHTNESS, SLEEP. Yeni komut eklenirse hem
+  `src/core/esp32_comm.py` hem ilgili `esp32/*/*.ino` güncellenir (bkz. `esp32/README.md`).
+- Ses seviyesi: PAM8403'te düğme yok; `Speaker.set_volume` → `amixer` (ReSpeaker WM8960 mikseri).
 - Wake word: openWakeWord (`src/audio/listener.py`, şimdilik `hey_jarvis` modeli).
   STT: Vosk offline (`models/vosk-model-small-tr`). TTS: pyttsx3 (offline) / edge-tts `tr-TR-AhmetNeural`.
 - LLM (`src/ai/agent.py`): `ai.provider: claude` ise Claude API (`ANTHROPIC_API_KEY` gerekir),
@@ -42,26 +50,25 @@ Konuşma dili ve kod yorumları **Türkçe**.
 
 | İşlev | GPIO | Not |
 |---|---|---|
-| Kafa pan servo | 12 | PWM0, MG996R (Motorobit metal pan-tilt) |
-| Kafa tilt servo | 13 | PWM1, MG996R |
-| Sol kol servo | 18 | SG90 |
-| Sağ kol servo | 19 | SG90 |
-| UART TX → ESP32 RX(16) | 14 | |
-| UART RX ← ESP32 TX(17) | 15 | |
-| ESP32 reset | 23 | |
-| TFT DC / RST | 24 / 25 | SPI0 CE0 (GPIO8), MOSI 10, CLK 11 |
-| PAM8403 SD (mute, aktif LOW) | 26 | |
-| ReSpeaker 2-Mics HAT | I2S 18/19/20/21, I2C 2/3 | HAT olarak takılı |
-| IMX500 AI Camera | CSI | |
+| I2C SDA / SCL | 2 / 3 | ReSpeaker WM8960 (0x1A) + PCA9685 (0x40) aynı hatta |
+| ReSpeaker I2S | 18 / 19 / 20 / 21 | **Başka iş için kullanma** |
+| ReSpeaker buton | 17 | |
+| ReSpeaker LED (APA102, SPI) | 10 / 11 | |
+| AI HAT+ 2 | PCIe, ID EEPROM 0 / 1 | |
+| AI Camera / Kamera 3 NoIR | CSI 0 / CSI 1 | 30 cm Pi 5 kabloları |
+| ESP32 kartları | USB | eyes, mouth, chest |
 
-ESP32-S3: MAX7219 DIN=5, CLK=18, CS=19; OLED I2C SDA=21, SCL=22.
-Servo 5V hattı RPi'den değil ayrı 5V/3A DC-DC'den, GND ortak. MG996R yük altında >1 A çekebilir.
+PCA9685 kanalları: 0 kafa yatay, 1 kafa dikey, 2 sol kol, 3 sağ kol, 4 gövde.
+Servo hattı Pi'den değil Savior 5V 10A kaynaktan (anahtar + 5A sigorta + 1000 µF), GND ortak.
+MG996R zorlanınca ~2.5 A çeker; gövde ve kafayı aynı anda hızlı döndürme.
 
 ## Donanım listesi
 
-RPi 5, ReSpeaker 2-Mics Pi HAT, Raspberry Pi AI Camera (IMX500), 3.5" ILI9341 SPI TFT,
-PAM8403 + hoparlör, ESP32-S3 DevKitC-1, 2× 8×8 MAX7219 LED matrix (gözler), 128×32 SSD1306 OLED (ağız),
-Motorobit Metal Pan-Tilt + 2× MG996R (kafa), 2× SG90 (kollar), 18650 2S2P + 5V/5A DC-DC.
+RPi 5 16GB + aktif soğutucu + AI HAT+ 2, ReSpeaker 2-Mics Pi HAT (uzun bacaklı başlıkla AI HAT+ 2 üstünde),
+Raspberry Pi AI Camera (IMX500, kafada), Kamera Modül 3 NoIR (gövdede), PAM8403 + 2× 8Ω 5W hoparlör,
+Waveshare ESP32-S3 1.28" çift göz, ESP32-C3 1.47" LCD (ağız), ESP32-S3 1.69" dokunmatik (göğüs),
+PCA9685, Motorobit metal pan-tilt + 2× MG996R (kafa), 3× MG996R 180° (kollar + gövde), döner bilyalı tabla,
+Pi 27W USB-C adaptör, Savior 5V 10A servo güç kaynağı.
 
 ## Çalıştırma
 
@@ -73,10 +80,12 @@ python main.py --web-only         # sadece panel (geliştirme makinesinde)
 
 ## Açık işler
 
-1. `assets/faces/*.png` ifade görselleri yok (`src/display/screen.py` metin fallback kullanıyor).
-2. MG996R için `src/servo/controller.py` `angle_to_duty` sınırları (2.5–12.5 %) donanımda kalibre edilecek.
-3. Özel "hey robodi" openWakeWord modeli eğitilecek (`audio.wake_word_model`).
-4. `esp32/mouth/mouth.ino` OLED ağız animasyonu tamamlanacak.
+1. `esp32/*/pins.h` pinleri Waveshare wiki'den doldurulacak; firmware'ler derlenip donanımda denenecek.
+2. Servo darbe aralıkları (`min_pulse`/`max_pulse`, şimdilik 500–2500 µs) ve yönleri donanımda kalibre edilecek.
+3. Tasarımcının ifade görselleri gelince ESP32 çizimleri onlarla değiştirilecek.
+4. Özel "hey robodi" openWakeWord modeli eğitilecek (`audio.wake_word_model`).
+5. ReSpeaker overlay adı (`wm8960-soundcard`) ve mikser kontrol adları Pi 5'te doğrulanacak.
+6. AI HAT+ 2: yerel yedek modelin kartta çalıştırılması (`src/ai/agent.py`).
 
 ## Kurallar
 
