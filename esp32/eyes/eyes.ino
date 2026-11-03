@@ -1,215 +1,148 @@
 /*
- * ROBODİ - ESP32-S3 Göz LED Matrix Kontrolü
- * Donanım: 2× 8x8 MAX7219 LED Matrix (Gözler)
- * Haberleşme: UART (115200 baud) → JSON komutları
+ * ROBODİ - Gözler
+ * Kart: Waveshare ESP32-S3 1.28" çift yuvarlak göz (2× GC9A01, 240×240)
+ * Bağlantı: Raspberry Pi'ye USB-C (USB CDC), 115200, satır sonlu JSON.
+ * Kütüphaneler: "GFX Library for Arduino" (Arduino_GFX), ArduinoJson 7
+ * Arduino ayarı: USB CDC On Boot = Enabled
  *
- * Bağlantı:
- *   ESP32 GPIO17 (TX) → RPi GPIO15 (RX)
- *   ESP32 GPIO16 (RX) → RPi GPIO14 (TX)
- *   ESP32 GPIO5  → MAX7219 DIN
- *   ESP32 GPIO18 → MAX7219 CLK
- *   ESP32 GPIO19 → MAX7219 CS
+ * Komutlar:
+ *   {"cmd":"WHO"}                                → {"board":"eyes"}
+ *   {"cmd":"INIT"}                               → açılış animasyonu
+ *   {"cmd":"EXPRESSION","eyes":"happy","color":[r,g,b]}
+ *   {"cmd":"BLINK"}  {"cmd":"BRIGHTNESS","value":0-255}  {"cmd":"SLEEP"}
+ * Göz şekilleri: neutral, happy, sad, angry, wide, squint
  */
-
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include <MD_MAX72xx.h>
-#include <MD_Parola.h>
+#include <Arduino_GFX_Library.h>
+#include "pins.h"
 
-// ── Donanım tanımları ─────────────────────────────────────────
-#define MAX_DEVICES  2    // 2 adet 8x8 matrix (sol + sağ göz)
-#define CS_PIN       19
-#define CLK_PIN      18
-#define DIN_PIN       5
-#define HW_TYPE      MD_MAX72xx::FC16_HW
+#define BOARD_NAME "eyes"
+#define W  240
+#define H  240
+#define CX 120
+#define CY 120
 
-MD_Parola eyes(HW_TYPE, DIN_PIN, CLK_PIN, CS_PIN, MAX_DEVICES);
+// İki ekran SCK/MOSI/DC/RST'yi paylaşır, CS'leri ayrıdır: CS elle seçilir.
+Arduino_DataBus *bus = new Arduino_ESP32SPI(EYE_DC, GFX_NOT_DEFINED, EYE_SCK, EYE_MOSI, GFX_NOT_DEFINED);
+Arduino_GFX *gfx = new Arduino_GC9A01(bus, EYE_RST, 0 /* döndürme */, true /* IPS */);
 
-// ── Göz desenleri (8x8 bitmap) ───────────────────────────────
-const uint8_t EYE_NEUTRAL[] = {
-  0b00111100,
-  0b01111110,
-  0b11111111,
-  0b11111111,
-  0b11111111,
-  0b01111110,
-  0b00111100,
-  0b00000000
-};
+String shape = "neutral";
+uint16_t color = 0x041F;       // varsayılan mavi
+unsigned long lastBlink = 0, blinkEvery = 4000;
+bool blinking = false;
 
-const uint8_t EYE_HAPPY[] = {
-  0b00000000,
-  0b00111100,
-  0b01111110,
-  0b11111111,
-  0b11111111,
-  0b01111110,
-  0b00111100,
-  0b00000000
-};
+// ── Ekran seçimi ────────────────────────────────────────────────
+enum { LEFT = 0, RIGHT = 1, BOTH = 2 };
 
-const uint8_t EYE_SAD[] = {
-  0b00111100,
-  0b01111110,
-  0b11111111,
-  0b11000011,
-  0b11000011,
-  0b00000000,
-  0b00000000,
-  0b00000000
-};
-
-const uint8_t EYE_ANGRY[] = {
-  0b11000000,
-  0b01100000,
-  0b00111100,
-  0b01111110,
-  0b11111111,
-  0b11111111,
-  0b01111110,
-  0b00000000
-};
-
-const uint8_t EYE_WIDE[] = {
-  0b01111110,
-  0b11111111,
-  0b11111111,
-  0b11111111,
-  0b11111111,
-  0b11111111,
-  0b01111110,
-  0b00111100
-};
-
-const uint8_t EYE_SQUINT[] = {
-  0b00000000,
-  0b00000000,
-  0b00111100,
-  0b01111110,
-  0b01111110,
-  0b00111100,
-  0b00000000,
-  0b00000000
-};
-
-const uint8_t EYE_BLINK[] = {
-  0b00000000,
-  0b00000000,
-  0b00000000,
-  0b11111111,
-  0b11111111,
-  0b00000000,
-  0b00000000,
-  0b00000000
-};
-
-// ── State ─────────────────────────────────────────────────────
-String currentExpression = "neutral";
-unsigned long lastBlinkTime = 0;
-unsigned long blinkInterval = 4000;  // 4 saniyede bir göz kırp
-bool isBlinking = false;
-
-// ── Setup ─────────────────────────────────────────────────────
-void setup() {
-  Serial.begin(115200);   // USB debug
-  Serial2.begin(115200, SERIAL_8N1, 16, 17);  // RPi UART
-
-  eyes.begin();
-  eyes.setIntensity(0, 4);  // Parlaklık (0-15)
-  eyes.setIntensity(1, 4);
-
-  setEyes("neutral");
-  Serial.println("ROBODİ Eyes v1.0 hazır");
+void selectEye(int which) {
+  digitalWrite(EYE_L_CS, (which == LEFT  || which == BOTH) ? LOW : HIGH);
+  digitalWrite(EYE_R_CS, (which == RIGHT || which == BOTH) ? LOW : HIGH);
 }
 
-// ── Ana Döngü ─────────────────────────────────────────────────
-void loop() {
-  // UART'tan JSON komut al
-  if (Serial2.available()) {
-    String line = Serial2.readStringUntil('\n');
-    line.trim();
-    if (line.length() > 0) {
-      handleCommand(line);
-    }
-  }
+// Ayna: sağ gözde "dış" taraf sağdadır
+int mx(int x, bool mirror) { return mirror ? W - x : x; }
 
-  // Otomatik göz kırpma
-  if (millis() - lastBlinkTime > blinkInterval && !isBlinking) {
-    startBlink();
-  }
-  if (isBlinking && millis() - lastBlinkTime > 150) {
-    endBlink();
-  }
-
-  delay(10);
+// Göz kapağı: dış köşede yOuter, iç köşede yInner hizasına kadar üstü kapatır
+void lid(int yOuter, int yInner, bool mirror) {
+  gfx->fillTriangle(mx(0, mirror), 0, mx(W, mirror), 0, mx(W, mirror), yInner, BLACK);
+  gfx->fillTriangle(mx(0, mirror), 0, mx(W, mirror), yInner, mx(0, mirror), yOuter, BLACK);
 }
 
-// ── Komut İşle ────────────────────────────────────────────────
-void handleCommand(String json) {
-  StaticJsonDocument<256> doc;
-  DeserializationError err = deserializeJson(doc, json);
-  if (err) {
-    Serial.println("JSON parse hatası: " + String(err.c_str()));
+void drawEye(const String &s, bool mirror) {
+  gfx->fillScreen(BLACK);
+  if (s == "blink") {
+    gfx->fillRoundRect(CX - 80, CY - 8, 160, 16, 8, color);
     return;
   }
+  if (s == "happy") {
+    gfx->fillArc(CX, CY + 40, 90, 62, 200, 340, color);   // ^ şekli
+    return;
+  }
+  int r = (s == "wide") ? 100 : 80;
+  gfx->fillCircle(CX, CY, r, color);
+  gfx->fillCircle(CX, CY, r / 2, BLACK);                      // göz bebeği
+  gfx->fillCircle(mx(CX + 22, mirror), CY - 24, 10, WHITE);   // parıltı
 
-  const char* cmd = doc["cmd"];
-
-  if (strcmp(cmd, "EXPRESSION") == 0) {
-    const char* eyes_expr = doc["eyes"] | "neutral";
-    setEyes(eyes_expr);
-    currentExpression = String(eyes_expr);
-
-  } else if (strcmp(cmd, "BLINK") == 0) {
-    startBlink();
-
-  } else if (strcmp(cmd, "BRIGHTNESS") == 0) {
-    int bri = doc["value"] | 4;
-    eyes.setIntensity(0, bri);
-    eyes.setIntensity(1, bri);
-
-  } else if (strcmp(cmd, "INIT") == 0) {
-    Serial2.println("{\"status\":\"ready\",\"device\":\"eyes\"}");
-    setEyes("happy");
-    delay(1000);
-    setEyes("neutral");
-
-  } else if (strcmp(cmd, "SLEEP") == 0) {
-    showPattern(EYE_BLINK);
-    delay(500);
-    eyes.setIntensity(0, 0);
-    eyes.setIntensity(1, 0);
+  if (s == "sad")    lid(CY - 10, CY - 80, mirror);           // dış köşe düşük
+  if (s == "angry")  lid(CY - 80, CY - 10, mirror);           // iç köşe düşük
+  if (s == "squint") {
+    gfx->fillRect(0, 0, W, CY - 30, BLACK);
+    gfx->fillRect(0, CY + 30, W, H - (CY + 30), BLACK);
   }
 }
 
-// ── Göz Deseni Göster ────────────────────────────────────────
-void setEyes(const char* expression) {
-  if (strcmp(expression, "neutral")  == 0) showPattern(EYE_NEUTRAL);
-  else if (strcmp(expression, "happy")   == 0) showPattern(EYE_HAPPY);
-  else if (strcmp(expression, "sad")     == 0) showPattern(EYE_SAD);
-  else if (strcmp(expression, "angry")   == 0) showPattern(EYE_ANGRY);
-  else if (strcmp(expression, "wide")    == 0) showPattern(EYE_WIDE);
-  else if (strcmp(expression, "squint")  == 0) showPattern(EYE_SQUINT);
-  else showPattern(EYE_NEUTRAL);
+void show(const String &s) {
+  selectEye(LEFT);  drawEye(s, false);
+  selectEye(RIGHT); drawEye(s, true);
+  selectEye(-1);
 }
 
-void showPattern(const uint8_t pattern[]) {
-  for (int dev = 0; dev < MAX_DEVICES; dev++) {
-    for (int row = 0; row < 8; row++) {
-      eyes.getGraphicObject()->setRow(dev, row, pattern[row]);
-    }
+void setBrightness(int v) {
+#if EYE_BL >= 0
+  analogWrite(EYE_BL, constrain(v, 0, 255));
+#endif
+}
+
+// ── Komutlar ────────────────────────────────────────────────────
+void handle(const String &line) {
+  JsonDocument doc;
+  if (deserializeJson(doc, line)) return;
+  const char *cmd = doc["cmd"] | "";
+
+  if (!strcmp(cmd, "WHO")) {
+    Serial.println("{\"board\":\"" BOARD_NAME "\"}");
+  } else if (!strcmp(cmd, "EXPRESSION")) {
+    if (doc["color"].is<JsonArray>())
+      color = gfx->color565(doc["color"][0], doc["color"][1], doc["color"][2]);
+    shape = doc["eyes"] | "neutral";
+    show(shape);
+  } else if (!strcmp(cmd, "BLINK")) {
+    lastBlink = 0;
+  } else if (!strcmp(cmd, "BRIGHTNESS")) {
+    setBrightness(doc["value"] | 200);
+  } else if (!strcmp(cmd, "INIT")) {
+    Serial.println("{\"status\":\"ready\",\"board\":\"" BOARD_NAME "\"}");
+    setBrightness(200);
+    show("happy"); delay(800); shape = "neutral"; show(shape);
+  } else if (!strcmp(cmd, "SLEEP")) {
+    show("blink"); delay(300);
+    selectEye(BOTH); gfx->fillScreen(BLACK); selectEye(-1);
+    setBrightness(0);
   }
 }
 
-void startBlink() {
-  showPattern(EYE_BLINK);
-  isBlinking    = true;
-  lastBlinkTime = millis();
-  // Sonraki blink için rastgele aralık (3-6 saniye)
-  blinkInterval = random(3000, 6000);
+void setup() {
+  Serial.begin(115200);
+  Serial.setTimeout(50);
+  pinMode(EYE_L_CS, OUTPUT);
+  pinMode(EYE_R_CS, OUTPUT);
+#if EYE_BL >= 0
+  pinMode(EYE_BL, OUTPUT);
+#endif
+  selectEye(BOTH);          // iki ekranı birlikte başlat
+  gfx->begin();
+  selectEye(-1);
+  setBrightness(200);
+  show(shape);
 }
 
-void endBlink() {
-  setEyes(currentExpression.c_str());
-  isBlinking = false;
+void loop() {
+  if (Serial.available()) {
+    String line = Serial.readStringUntil('\n');
+    line.trim();
+    if (line.length()) handle(line);
+  }
+  // Otomatik göz kırpma (3–6 sn)
+  unsigned long now = millis();
+  if (!blinking && now - lastBlink > blinkEvery && shape != "happy") {
+    show("blink");
+    blinking = true;
+    lastBlink = now;
+    blinkEvery = random(3000, 6000);
+  }
+  if (blinking && now - lastBlink > 150) {
+    show(shape);
+    blinking = false;
+  }
 }
