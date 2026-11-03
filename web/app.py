@@ -142,16 +142,34 @@ def _cpu_temp():
 
 @app.route("/api/servo", methods=["POST"])
 def api_servo():
-    data  = request.json
+    data  = request.json or {}
     name  = data.get("servo")
-    angle = float(data.get("angle", 0))
-    if _robot and name:
-        asyncio.run_coroutine_threadsafe(
-            _robot.servos.move_to(name, angle),
-            _robot._loop
-        )
-        return jsonify({"ok": True})
-    return jsonify({"ok": False, "error": "Robot offline"}), 503
+    if _robot is None:
+        return jsonify({"ok": False, "error": "Robot offline"}), 503
+    try:
+        angle = float(data.get("angle", 0))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Geçersiz açı"}), 400
+    if not name or not _robot.servos.has(name):
+        return jsonify({"ok": False, "error": f"Bilinmeyen servo: {name}"}), 400
+    asyncio.run_coroutine_threadsafe(
+        _robot.servos.move_to(name, angle),
+        _robot._loop
+    )
+    return jsonify({"ok": True})
+
+
+@app.route("/api/volume", methods=["POST"])
+def api_volume():
+    """Hoparlör ses seviyesi (0-100)."""
+    if _robot is None:
+        return jsonify({"ok": False, "error": "Robot offline"}), 503
+    try:
+        value = int((request.json or {}).get("volume"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Geçersiz ses seviyesi"}), 400
+    asyncio.run_coroutine_threadsafe(_robot.speaker.set_volume(value), _robot._loop)
+    return jsonify({"ok": True, "volume": max(0, min(100, value))})
 
 
 @app.route("/api/say", methods=["POST"])
@@ -169,9 +187,9 @@ def api_say():
 @app.route("/api/expression", methods=["POST"])
 def api_expression():
     expr = request.json.get("expression", "idle")
-    if _robot:
-        _robot.esp32.set_expression(expr)
-        _robot.display.show_face(expr)
+    if _robot and getattr(_robot, "_loop", None):
+        # set_expression görev oluşturur; robotun döngüsünde çalışmalı
+        _robot._loop.call_soon_threadsafe(_robot.esp32.set_expression, expr)
         return jsonify({"ok": True})
     return jsonify({"ok": False}), 503
 
@@ -232,7 +250,7 @@ def api_logs():
 
 # ── Ayarlar ───────────────────────────────────────────────────────
 
-REQUIRED_SECTIONS = ("gpio", "audio", "vision", "display", "esp32", "web", "ai")
+REQUIRED_SECTIONS = ("servos", "audio", "vision", "esp32", "web", "ai")
 
 
 def _settings_path() -> str:

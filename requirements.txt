@@ -23,16 +23,12 @@ picamera2>=0.3            # RPi kamera (RPi'ye özgü)
 Pillow>=10.0
 face_recognition>=1.3     # Kullanıcı kimlik tanıma (dlib gerektirir)
 
-# ── GPIO ─────────────────────────────────────────────────────────
-RPi.GPIO>=0.7.1           # RPi'ye özgü
-# gpiozero>=2.0           # alternatif
-
-# ── Display ──────────────────────────────────────────────────────
-adafruit-circuitpython-ili9341>=1.3
+# ── Servolar (PCA9685, I2C) ──────────────────────────────────────
+adafruit-circuitpython-servokit>=1.3
 adafruit-blinka>=8.0
 
 # ── Haberleşme ───────────────────────────────────────────────────
-pyserial>=3.5
+pyserial>=3.5             # ESP32 ekran kartları (USB)
 httpx>=0.27
 
 # ── AI ───────────────────────────────────────────────────────────

@@ -31,6 +31,7 @@
   <div class="card">
     <h2 class="card-title">🎮 Servo Kontrol</h2>
     {% for key, label, lo, hi, val in [
+         ("waist",     "Gövde",      -90, 90, 0),
          ("head_pan",  "Kafa Yatay", -90, 90, 0),
          ("head_tilt", "Kafa Dikey", -30, 30, 0),
          ("left_arm",  "Sol Kol",      0, 180, 90),
@@ -64,6 +65,11 @@
              maxlength="200" onkeydown="if(event.key==='Enter')sayText()">
       <button class="btn btn-primary" onclick="sayText()">Söyle</button>
     </div>
+    <div class="servo-row" style="margin-top:12px">
+      <span class="servo-label">Ses</span>
+      <input type="range" min="0" max="100" value="80" id="volume" oninput="volumeMove(this.value)">
+      <span class="servo-val" id="val_volume">%80</span>
+    </div>
 
     <h2 class="card-title" style="margin-top:20px">⚡ Hızlı İşlemler</h2>
     <div class="button-grid">
@@ -77,7 +83,7 @@
     <h2 class="card-title">📊 Sistem Durumu</h2>
     {% for key, label in [
          ("camera", "Kamera"), ("microphone", "Mikrofon"), ("wake_word", "Wake word"),
-         ("esp32", "ESP32"), ("ai", "AI Motoru"), ("gmail", "Gmail")] %}
+         ("esp32", "Ekran kartları"), ("servo_driver", "Servo sürücü"), ("ai", "AI Motoru"), ("gmail", "Gmail")] %}
     <div class="stat-row">
       <span class="stat-key">{{ label }}</span>
       <span class="stat-val" id="sys_{{ key }}">—</span>
@@ -116,6 +122,13 @@ function servoMove(servo, val) {
   document.getElementById(`val_${servo}`).textContent = val + "°";
   clearTimeout(servoTimers[servo]);   // kaydırırken istekleri seyrelt
   servoTimers[servo] = setTimeout(() => post("/api/servo", {servo, angle: parseFloat(val)}), 120);
+}
+
+let volumeTimer;
+function volumeMove(val) {
+  document.getElementById("val_volume").textContent = "%" + val;
+  clearTimeout(volumeTimer);
+  volumeTimer = setTimeout(() => post("/api/volume", {volume: parseInt(val)}), 200);
 }
 
 async function centerAll() {
@@ -171,7 +184,12 @@ async function refreshDashboard() {
     setText("statUser", d.current_user || "Tanınmadı");
     setText("statConversation", d.running ? (d.conversation ? "Aktif" : "Pasif") : "—");
     setText("statCpu", d.cpu_temp != null ? d.cpu_temp + " °C" : "—");
-    for (const k of ["camera", "microphone", "wake_word", "esp32", "ai", "gmail"]) setText("sys_" + k, d[k]);
+    for (const k of ["camera", "microphone", "wake_word", "esp32", "servo_driver", "ai", "gmail"]) setText("sys_" + k, d[k]);
+    const vol = document.getElementById("volume");
+    if (d.volume != null && document.activeElement !== vol) {
+      vol.value = d.volume;
+      setText("val_volume", "%" + d.volume);
+    }
     for (const [servo, angle] of Object.entries(d.servos || {})) {
       const el = document.getElementById("srv_" + servo);
       if (el && document.activeElement !== el) {

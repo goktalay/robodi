@@ -1,6 +1,6 @@
 """
-PAM8403 amplifikatör üzerinden ses çıkışı.
-TTS ve ses efektleri.
+ReSpeaker (WM8960) 3.5 mm çıkışı → PAM8403 amfi → hoparlörler.
+TTS, ses efektleri ve ses seviyesi (amfide düğme yok, ALSA mikserinden).
 """
 import asyncio
 import logging
@@ -21,6 +21,9 @@ class Speaker:
     def __init__(self, config: dict):
         self.language   = config.get("language", "tr-TR")
         self.tts_engine = config.get("tts_engine", "pyttsx3")
+        self.mixer_card = config.get("mixer_card", "wm8960soundcard")
+        self.mixer_controls = config.get("mixer_controls", ["Headphone", "Playback"])
+        self.volume     = int(config.get("volume", 80))
         self._tts       = None
         self._lock      = asyncio.Lock()
         self._init_tts()
@@ -72,11 +75,30 @@ class Speaker:
             voice = "tr-TR-AhmetNeural"   # Türkçe erkek sesi
             communicate = edge_tts.Communicate(text, voice)
             await communicate.save("/tmp/robodi_tts.mp3")
-            await asyncio.create_subprocess_exec(
+            proc = await asyncio.create_subprocess_exec(
                 "mpg123", "-q", "/tmp/robodi_tts.mp3"
             )
+            await proc.wait()   # konuşma bitmeden dinlemeye geçilmesin
         except Exception as e:
             logger.error(f"Edge TTS hata: {e}")
+
+    async def set_volume(self, percent: int) -> bool:
+        """Ses seviyesini ayarla (0-100). amixer yoksa yalnızca değeri saklar."""
+        self.volume = max(0, min(100, int(percent)))
+        ok = True
+        for control in self.mixer_controls:
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "amixer", "-q", "-c", self.mixer_card, "sset", control, f"{self.volume}%",
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                ok = (await proc.wait()) == 0 and ok
+            except (FileNotFoundError, OSError):
+                ok = False
+        if not ok:
+            logger.debug(f"[SIM SPEAKER] Ses seviyesi: %{self.volume}")
+        return ok
 
     async def play_sound(self, name: str):
         """Ses efekti çal."""

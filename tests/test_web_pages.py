@@ -190,6 +190,64 @@ def test_hizli_islem_baslatilir(client, loop, url, beklenen):
     assert robot.calls == [beklenen]
 
 
+# ── Servo ve ses ─────────────────────────────────────────────────
+
+class FakeMover:
+    """Servo ve ses uç noktaları için sahte robot."""
+    def __init__(self, loop):
+        from src.servo.controller import ServoController
+        self._loop = loop
+        self.servos = ServoController({})
+        self.volumes = []
+        robot = self
+
+        class Speaker:
+            async def set_volume(self, v):
+                robot.volumes.append(v)
+        self.speaker = Speaker()
+
+
+def _bekle(kosul):
+    import time
+    for _ in range(100):
+        if kosul():
+            return True
+        time.sleep(0.02)
+    return False
+
+
+def test_govde_servosu_panelden_hareket_eder(client, loop):
+    robot = FakeMover(loop)
+    web_app.set_robot(robot)
+    assert client.post("/api/servo", json={"servo": "waist", "angle": 20}).status_code == 200
+    assert _bekle(lambda: robot.servos.position("waist") == 20)
+    import time
+    time.sleep(0.05)   # move_to'nun son beklemesi bitsin
+
+
+@pytest.mark.parametrize("govde, kod", [
+    ({"servo": "kuyruk", "angle": 10}, 400),
+    ({"servo": "waist", "angle": "abc"}, 400),
+    ({"angle": 10}, 400),
+])
+def test_servo_gecersiz_istek(client, loop, govde, kod):
+    web_app.set_robot(FakeMover(loop))
+    assert client.post("/api/servo", json=govde).status_code == kod
+
+
+def test_ses_seviyesi(client, loop):
+    robot = FakeMover(loop)
+    web_app.set_robot(robot)
+    r = client.post("/api/volume", json={"volume": 130})
+    assert r.status_code == 200 and r.get_json()["volume"] == 100
+    assert _bekle(lambda: robot.volumes == [130])   # sınır Speaker.set_volume içinde
+    assert client.post("/api/volume", json={"volume": "çok"}).status_code == 400
+
+
+def test_ses_robot_yokken_503(client):
+    assert client.post("/api/volume", json={"volume": 50}).status_code == 503
+
+
 def test_hizli_islem_girissiz_401(monkeypatch):
     monkeypatch.setenv("ROBODI_ADMIN_PASSWORD", PASSWORD)
     c = web_app.app.test_client()

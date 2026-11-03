@@ -15,7 +15,6 @@ import yaml
 from ..ai.agent import AIAgent
 from ..audio.listener import AudioListener
 from ..audio.speaker import Speaker
-from ..display.screen import Display
 from ..servo.controller import ServoController
 from ..services.gmail import GmailReader
 from ..vision.camera import Camera
@@ -58,9 +57,10 @@ class Robodi:
         self.speaker  = Speaker(self.config["audio"])
         self.camera   = Camera(vision_cfg)
         self.face_id  = FaceIdentifier(vision_cfg.get("face_id", {}))
-        self.servos   = ServoController(self.config["gpio"]["servo"])
-        self.display  = Display(self.config["display"])
-        self.esp32    = ESP32Comm(self.config["esp32"])
+        servo_cfg = self.config.get("servos", {})
+        self.servos   = ServoController(servo_cfg)
+        self.waist_handoff = servo_cfg.get("waist_handoff", 60)
+        self.esp32    = ESP32Comm(self.config.get("esp32", {}))
         self.ai       = AIAgent(self.config.get("ai", {}))
         self.gmail    = GmailReader(self.config.get("gmail", {}))
 
@@ -87,8 +87,8 @@ class Robodi:
 
         await asyncio.gather(
             self.esp32.connect(),
-            self.display.init(),
             self.servos.center_all(),
+            self.speaker.set_volume(self.speaker.volume),
         )
 
         self._set_face("happy")
@@ -112,7 +112,7 @@ class Robodi:
             t.cancel()
         self._tasks = []
         await self.servos.center_all()
-        self.display.show_face("idle")
+        self.servos.cleanup()
         await self.esp32.disconnect()
         self.audio.stop()
         self.camera.stop()
@@ -207,7 +207,6 @@ class Robodi:
         self.state.transition(RobodiState.IDLE)
 
     def _set_face(self, expression: str):
-        self.display.show_face(expression)
         self.esp32.set_expression(expression)
 
     # ── Panel için durum özeti ───────────────────────────────────
@@ -215,7 +214,6 @@ class Robodi:
     def status(self) -> dict:
         """Web panelinin gösterdiği alt sistem durumları."""
         cam_mode = getattr(self.camera, "_mode", "sim")
-        serial_port = getattr(self.esp32, "_serial", None)
         if getattr(self.ai, "_claude", None):
             ai = f"Claude ({self.ai.claude_model})"
         else:
@@ -228,16 +226,18 @@ class Robodi:
             "camera":       {"picamera2": "IMX500", "opencv": "USB/OpenCV"}.get(cam_mode, "Simülasyon"),
             "microphone":   "Hazır" if getattr(self.audio, "_pa", None) else "Simülasyon",
             "wake_word":    self.audio.ww_model_name if getattr(self.audio, "_oww", None) else "Kapalı",
-            "esp32":        "Bağlı" if serial_port is not None and serial_port.is_open else "Simülasyon",
+            "esp32":        self.esp32.status_text(),
+            "servo_driver": self.servos.mode,
             "ai":           ai,
             "gmail":        "Hazır" if self.gmail.is_ready() else "Kapalı",
-            "servos":       dict(getattr(self.servos, "_positions", {})),
+            "volume":       self.speaker.volume,
+            "servos":       self.servos.positions(),
         }
 
     # ── Yüz Takip / Tanıma ───────────────────────────────────────
 
     async def _track_face(self, face_bbox):
-        """Kafa servolarını yüze çevir."""
+        """Kafa servolarını yüze çevir; kafa çok dönerse gövdeyi kişiye döndür."""
         x, y, w, h = face_bbox
         frame_w, frame_h = self.config["vision"]["resolution"]
         cx = (x + w / 2) / frame_w - 0.5   # -0.5 .. +0.5
@@ -246,6 +246,25 @@ class Robodi:
             await self.servos.move_relative("head_pan",  -cx * 30)
         if abs(cy) > 0.05:
             await self.servos.move_relative("head_tilt",  cy * 20)
+        await self._waist_handoff()
+
+    async def _waist_handoff(self):
+        """Kafa yatay açısı eşiği geçtiyse gövde o yöne döner, kafa aynı ölçüde geri gelir.
+        Bakış yönü değişmez. İkisi yavaş hareket eder (aynı anda hızlı dönüş akımı artırır)."""
+        if not self.servos.has("waist"):
+            return
+        pan = self.servos.position("head_pan")
+        if abs(pan) <= self.waist_handoff:
+            return
+        waist = self.servos.position("waist")
+        lo, hi = self.servos.limits("waist")
+        shift = max(lo, min(hi, waist + pan)) - waist
+        if abs(shift) < 1:
+            return   # gövde sınırda, kafa kendi aralığında devam eder
+        await asyncio.gather(
+            self.servos.move_to("waist", waist + shift, speed=1.0),
+            self.servos.move_to("head_pan", pan - shift, speed=1.0),
+        )
 
     async def _maybe_identify(self, frame):
         now = time.monotonic()

@@ -36,10 +36,20 @@ sudo apt-get install -y \
   cmake build-essential \
   libboost-all-dev
 
-# SPI ve UART etkinleştir
+# I2C (PCA9685 servo sürücü + ReSpeaker kodeği) ve SPI (ReSpeaker LED'leri) etkinleştir
+sudo raspi-config nonint do_i2c 0
 sudo raspi-config nonint do_spi 0
-sudo raspi-config nonint do_serial_hw 0
-sudo raspi-config nonint do_serial_cons 1
+
+# ReSpeaker 2-Mics HAT (WM8960 kodek) ses kartı
+# DOĞRULA: overlay adı Pi 5 çekirdeğinde "wm8960-soundcard"; ilk kurulumda `aplay -l` ile kontrol edin
+BOOT_CONFIG=/boot/firmware/config.txt
+if ! grep -q "^dtoverlay=wm8960-soundcard" "$BOOT_CONFIG"; then
+  echo "dtoverlay=wm8960-soundcard" | sudo tee -a "$BOOT_CONFIG" > /dev/null
+  echo "ReSpeaker overlay eklendi (yeniden başlatma gerekir)"
+fi
+
+# ESP32 kartlarının USB seri portlarına erişim
+sudo usermod -aG dialout,i2c "$ROBODI_USER"
 
 # Python bağımlılıkları
 pip install -r requirements.txt --break-system-packages
