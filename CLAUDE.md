@@ -29,7 +29,7 @@ Konuşma dili ve kod yorumları **Türkçe**.
   portlar `{"cmd":"WHO"}` ile taranır. 115200, satır sonlu JSON; her karta yalnızca kendi alanı gider.
   Komutlar: WHO, INIT, EXPRESSION, BLINK, BRIGHTNESS, SLEEP. Yeni komut eklenirse hem
   `src/core/esp32_comm.py` hem ilgili `esp32/*/*.ino` güncellenir (bkz. `esp32/README.md`).
-- Ses seviyesi: PAM8403'te düğme yok; `Speaker.set_volume` → `amixer` (ReSpeaker WM8960 mikseri).
+- Ses seviyesi: PAM8403'te düğme yok; `Speaker.set_volume` → `amixer` (ReSpeaker v2.0 TLV320AIC3104, kontrol `PCM`).
 - Wake word: openWakeWord (`src/audio/listener.py`, şimdilik `hey_jarvis` modeli).
   STT: Vosk offline (`models/vosk-model-small-tr`). TTS: pyttsx3 (offline) / edge-tts `tr-TR-AhmetNeural`.
 - LLM (`src/ai/agent.py`): `ai.provider: claude` ise Claude API (`ANTHROPIC_API_KEY` gerekir),
@@ -50,7 +50,7 @@ Konuşma dili ve kod yorumları **Türkçe**.
 
 | İşlev | GPIO | Not |
 |---|---|---|
-| I2C SDA / SCL | 2 / 3 | ReSpeaker WM8960 (0x1A) + PCA9685 (0x40) aynı hatta |
+| I2C SDA / SCL | 2 / 3 | ReSpeaker kodek (0x18) + PCA9685 (0x40) aynı hatta |
 | ReSpeaker I2S | 18 / 19 / 20 / 21 | **Başka iş için kullanma** |
 | ReSpeaker buton | 17 | |
 | ReSpeaker LED (APA102, SPI) | 10 / 11 | |
@@ -84,7 +84,7 @@ python main.py --web-only         # sadece panel (geliştirme makinesinde)
 2. Servo darbe aralıkları (`min_pulse`/`max_pulse`, şimdilik 500–2500 µs) ve yönleri donanımda kalibre edilecek.
 3. Tasarımcının ifade görselleri gelince ESP32 çizimleri onlarla değiştirilecek.
 4. Özel "hey robodi" openWakeWord modeli eğitilecek (`audio.wake_word_model`).
-5. ReSpeaker overlay adı (`wm8960-soundcard`) ve mikser kontrol adları Pi 5'te doğrulanacak.
+5. ReSpeaker v2.0 (TLV320AIC3104, kart `seeed2micvoicec`): HP/Line çıkış kazancı ve PCM seviyesi hoparlörle ayarlanacak.
 6. AI HAT+ 2: yerel yedek modelin kartta çalıştırılması (`src/ai/agent.py`).
 
 ## Kurallar

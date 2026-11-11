@@ -5,22 +5,23 @@ robodi:
 
 # ─── Servolar (PCA9685, I2C: GPIO2 SDA / GPIO3 SCL) ──────────────
 # Hepsi MG996R 180°. Açı: yazılımın kullandığı açı (min..max).
-# Fiziksel açı = açı + offset (0..180). min_pulse/max_pulse (µs) donanımda kalibre edilecek;
+# Fiziksel açı = açı + offset (0..180). min_pulse/max_pulse (µs): şimdilik her servoda güvenli
+# 1000-2000 µs (yaklaşık 90° hareket); MG996R için donanımda genişletilecek (~500-2500).
 # servo ters dönüyorsa invert: true.
 servos:
   i2c_address: 0x40
   frequency: 50
   waist_handoff: 60          # kafa yatay bu açıyı geçince gövde kişiye döner (derece)
   channels:
-    head_pan:  {channel: 0, min: -90, max: 90,  center: 0,  offset: 90, min_pulse: 500, max_pulse: 2500, invert: false}  # kafa yatay (pan-tilt)
-    head_tilt: {channel: 1, min: -30, max: 30,  center: 0,  offset: 90, min_pulse: 500, max_pulse: 2500, invert: false}  # kafa dikey (pan-tilt)
-    left_arm:  {channel: 2, min: 0,   max: 180, center: 90, offset: 0,  min_pulse: 500, max_pulse: 2500, invert: false}  # sol kol
-    right_arm: {channel: 3, min: 0,   max: 180, center: 90, offset: 0,  min_pulse: 500, max_pulse: 2500, invert: false}  # sağ kol
-    waist:     {channel: 4, min: -90, max: 90,  center: 0,  offset: 90, min_pulse: 500, max_pulse: 2500, invert: false}  # gövde dönüşü (tabanda)
+    head_pan:  {channel: 0, min: -90, max: 90,  center: 0,  offset: 90, min_pulse: 1000, max_pulse: 2000, invert: false}  # kafa yatay (pan-tilt)
+    head_tilt: {channel: 1, min: -30, max: 30,  center: 0,  offset: 90, min_pulse: 1000, max_pulse: 2000, invert: false}  # kafa dikey (pan-tilt)
+    left_arm:  {channel: 2, min: 0,   max: 180, center: 90, offset: 0,  min_pulse: 1000, max_pulse: 2000, invert: false}  # sol kol
+    right_arm: {channel: 3, min: 0,   max: 180, center: 90, offset: 0,  min_pulse: 1000, max_pulse: 2000, invert: false}  # sağ kol
+    waist:     {channel: 4, min: -90, max: 90,  center: 0,  offset: 90, min_pulse: 1000, max_pulse: 2000, invert: false}  # gövde dönüşü (tabanda)
 
 # ─── Audio (ReSpeaker 2-Mics) ────────────────────────────────────
 audio:
-  input_device: "ReSpeaker"
+  input_device: "seeed2micvoicec"   # ReSpeaker 2-Mics v2.0 ALSA kart adı (cihaz adında aranır)
   sample_rate: 16000
   channels: 2
   chunk_size: 1024
@@ -30,9 +31,9 @@ audio:
   vosk_model: "models/vosk-model-small-tr"
   tts_engine: "pyttsx3"        # veya "edge-tts"
   language: "tr-TR"
-  # Ses seviyesi: PAM8403 amfide düğme yok, seviye ReSpeaker (WM8960) mikserinden ayarlanır
-  mixer_card: "wm8960soundcard"
-  mixer_controls: ["Headphone", "Playback"]   # amfi 3.5 mm çıkıştan beslenir
+  # Ses seviyesi: PAM8403 amfide düğme yok, seviye ReSpeaker v2.0 (TLV320AIC3104) mikserinden ayarlanır
+  mixer_card: "seeed2micvoicec"
+  mixer_controls: ["PCM"]      # DAC dijital seviyesi (0-127); HP/Line çıkış kazancı alsactl durumunda
   volume: 80                   # yüzde
 
 # ─── Vision (AI Camera IMX500) ───────────────────────────────────

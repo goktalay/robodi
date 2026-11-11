@@ -23,12 +23,10 @@ sudo apt-get install -y \
   libportaudio2 libportaudio-dev \
   portaudio19-dev \
   mpg123 alsa-utils \
-  espeak flac ffmpeg \
-  libatlas-base-dev \
+  espeak-ng flac ffmpeg \
   libopenblas-dev \
-  python3-opencv \
+  python3-opencv python3-picamera2 \
   i2c-tools \
-  libgpiod2 \
   wget unzip curl
 
 # face_recognition → dlib kaynaktan derlenir (Pi 5'te ~15-30 dk sürebilir)
@@ -40,19 +38,24 @@ sudo apt-get install -y \
 sudo raspi-config nonint do_i2c 0
 sudo raspi-config nonint do_spi 0
 
-# ReSpeaker 2-Mics HAT (WM8960 kodek) ses kartı
-# DOĞRULA: overlay adı Pi 5 çekirdeğinde "wm8960-soundcard"; ilk kurulumda `aplay -l` ile kontrol edin
-BOOT_CONFIG=/boot/firmware/config.txt
-if ! grep -q "^dtoverlay=wm8960-soundcard" "$BOOT_CONFIG"; then
-  echo "dtoverlay=wm8960-soundcard" | sudo tee -a "$BOOT_CONFIG" > /dev/null
-  echo "ReSpeaker overlay eklendi (yeniden başlatma gerekir)"
+# ReSpeaker 2-Mics HAT v2.0 (TLV320AIC3104 kodek) ses kartı: "seeed2micvoicec"
+# Sürücü seeed-linux-dtoverlays deposundaki respeaker-2mic-v2_0 overlay'i ile kurulur
+# (config.txt: dtparam=i2s=on + dtoverlay=respeaker-2mic-v2_0). Betik config.txt'ye dokunmaz.
+if ! aplay -l 2>/dev/null | grep -q seeed2micvoicec; then
+  echo "⚠️  ReSpeaker ses kartı (seeed2micvoicec) bulunamadı; respeaker-2mic-v2_0 overlay'ini kurun."
 fi
 
-# ESP32 kartlarının USB seri portlarına erişim
-sudo usermod -aG dialout,i2c "$ROBODI_USER"
+# ESP32 kartlarının USB seri portları, I2C (PCA9685) ve ses kartı erişimi
+sudo usermod -aG dialout,i2c,audio,video "$ROBODI_USER"
 
 # Python bağımlılıkları
-pip install -r requirements.txt --break-system-packages
+# openwakeword, Linux'ta tflite-runtime ister; onun Python 3.13 sürümü yok. Robot onnx kullandığı için
+# openwakeword bağımlılıkları olmadan kurulur, gerekenler ayrıca yüklenir.
+grep -v "^openwakeword" requirements.txt > /tmp/robodi-req.txt
+pip install -r /tmp/robodi-req.txt --break-system-packages
+pip install --no-deps "openwakeword>=0.6" --break-system-packages
+pip install onnxruntime scipy scikit-learn tqdm requests --break-system-packages
+python3 -c "import openwakeword.utils as u; u.download_models()" || echo "⚠️  openWakeWord modelleri indirilemedi"
 
 # Vosk Türkçe model indir
 mkdir -p models

@@ -1,5 +1,5 @@
 """
-ReSpeaker (WM8960) 3.5 mm çıkışı → PAM8403 amfi → hoparlörler.
+ReSpeaker v2.0 (TLV320AIC3104) 3.5 mm çıkışı → PAM8403 amfi → hoparlörler.
 TTS, ses efektleri ve ses seviyesi (amfide düğme yok, ALSA mikserinden).
 """
 import asyncio
@@ -21,8 +21,8 @@ class Speaker:
     def __init__(self, config: dict):
         self.language   = config.get("language", "tr-TR")
         self.tts_engine = config.get("tts_engine", "pyttsx3")
-        self.mixer_card = config.get("mixer_card", "wm8960soundcard")
-        self.mixer_controls = config.get("mixer_controls", ["Headphone", "Playback"])
+        self.mixer_card = config.get("mixer_card", "seeed2micvoicec")
+        self.mixer_controls = config.get("mixer_controls", ["PCM"])
         self.volume     = int(config.get("volume", 80))
         self._tts       = None
         self._lock      = asyncio.Lock()
